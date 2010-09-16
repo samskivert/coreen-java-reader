@@ -29,24 +29,26 @@ import scalaj.collection.Imports._
  */
 object Reader
 {
-  def process (filename :String, content :String) :List[Elem] =
+  def process (filename :String, content :String) :Elem =
     process0(List(mkTestObject(filename, content))) head
 
-  def process (files :List[File]) :List[List[Elem]] = {
+  def process (files :List[File]) :List[Elem] = {
     val fm = compiler.getStandardFileManager(null, null, null) // TODO: args?
     process0(fm.getJavaFileObjects(files.toArray :_*).asScala.toList)
   }
 
-  private def process0 (files :List[JavaFileObject]) :List[List[Elem]] = {
+  private def process0 (files :List[JavaFileObject]) :List[Elem] = {
     val options = null // List("-Xjcov").asJava
-    import java.net.URLClassLoader
-    println(classOf[JavacTask].getClassLoader.asInstanceOf[URLClassLoader].getURLs.toList)
-    println(compiler.getClass.getClassLoader.asInstanceOf[URLClassLoader].getURLs.toList)
     val task = compiler.getTask(null, null, null, options, null,
                                 files.asJava).asInstanceOf[JavacTask]
     val asts = task.parse.asScala
     task.analyze
-    asts map(ast => scanner.scan(ast)) toList
+    asts map(ast => {
+      val path = ast.asInstanceOf[JCCompilationUnit].sourcefile.toUri.getPath
+      <compunit src={path}>
+      {scanner.scan(ast)}
+      </compunit>
+    }) toList
   }
 
   private def mkTestObject (file :String, content :String) =
@@ -111,5 +113,5 @@ object Reader
     protected var _curclass :JCClassDecl = _
   }
 
-  private val compiler = ToolProvider.getSystemJavaCompiler
+  private val compiler = com.sun.tools.javac.api.JavacTool.create
 }

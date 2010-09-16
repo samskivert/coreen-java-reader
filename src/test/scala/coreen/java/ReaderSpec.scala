@@ -29,8 +29,10 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     }"""
 
   "Reader" should "handle this code" in {
-    val pkg = Reader.process("TestA.java", testA).head
-    // println(new scala.xml.PrettyPrinter(100, 2).format(pkg))
+    val cunit = Reader.process("TestA.java", testA)
+    println(new scala.xml.PrettyPrinter(100, 2).format(cunit))
+
+    val pkg = (cunit \ "def").head
     (pkg \ "@name").text should equal("foo.bar")
 
     val outer = (pkg \ "def").head
