@@ -1,0 +1,4 @@
+.ensime
+lib_managed
+project/boot
+target
