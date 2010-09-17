@@ -29,13 +29,21 @@ import scalaj.collection.Imports._
  */
 object Reader
 {
-  def process (filename :String, content :String) :Elem =
-    process0(List(mkTestObject(filename, content))) head
-
-  def process (files :List[File]) :List[Elem] = {
+  /**
+   * Processes a list of source files.
+   * @return a list of {@code <compunit>} elements containing their defs and uses.
+   */
+  def process (files :Seq[File]) :List[Elem] = {
     val fm = compiler.getStandardFileManager(null, null, null) // TODO: args?
     process0(fm.getJavaFileObjects(files.toArray :_*).asScala.toList)
   }
+
+  /**
+   * Processes the supplied text as a source file with the specified name.
+   * @return a {@code <compunit>} element containing the source code's defs and uses.
+   */
+  def process (filename :String, content :String) :Elem =
+    process0(List(mkTestObject(filename, content))) head
 
   private def process0 (files :List[JavaFileObject]) :List[Elem] = {
     val options = null // List("-Xjcov").asJava
@@ -46,7 +54,7 @@ object Reader
     asts map(ast => {
       val path = ast.asInstanceOf[JCCompilationUnit].sourcefile.toUri.getPath
       <compunit src={path}>
-      {scanner.scan(ast)}
+      {scanner(ast)}
       </compunit>
     }) toList
   }
@@ -56,8 +64,9 @@ object Reader
       override def getCharContent (ignoreEncodingErrors :Boolean) :CharSequence = content
     }
 
-  private val scanner = new TreePathScanner[Unit,ArrayBuffer[Elem]] {
-    def scan (path :Tree) :List[Elem] = {
+  // work around Scala's penchant to assign structural types where they are not wanted
+  private val scanner = new TreePathScanner[Unit,ArrayBuffer[Elem]] with (Tree => List[Elem]) {
+    def apply (path :Tree) :List[Elem] = {
       val buf = ArrayBuffer[Elem]()
       scan(path, buf)
       buf toList

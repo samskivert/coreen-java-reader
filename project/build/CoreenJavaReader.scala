@@ -1,14 +1,18 @@
 import sbt._
 
-class CoreenJavaReader (info :ProjectInfo) extends DefaultProject(info) {
+class CoreenJavaReader (info :ProjectInfo) extends DefaultProject(info) with ProguardProject {
   val scalatest = "org.scalatest" % "scalatest" % "1.2" % "test"
   val scalaj_collection = "org.scalaj" %% "scalaj-collection" % "1.0"
 
-  // TODO: we need to fork our tests otherwise they get javac stuff from the wrong place; we
-  // might be able to only define tools.jar on the compile classpath but not the test classpath,
-  // not sure if that's possible...
-
   // we need tools.jar in our classpath because we're building against javac bits
-  override def unmanagedClasspath = super.unmanagedClasspath +++
-    Path.fromFile(Path.fileProperty("java.home").asFile.getParent) / "lib" / "tools.jar"
+  val toolsJarPath = Path.fromFile(
+    Path.fileProperty("java.home").asFile.getParent) / "lib" / "tools.jar"
+  override def unmanagedClasspath = super.unmanagedClasspath +++ toolsJarPath
+
+  // proguard plugin configurations
+  override def proguardInJars = super.proguardInJars +++ scalaLibraryPath
+  override def proguardLibraryJars = super.proguardLibraryJars +++ toolsJarPath
+  override def proguardOptions = List(
+    proguardKeepMain("coreen.java.Main")
+  )
 }
