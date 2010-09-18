@@ -105,10 +105,11 @@ object Reader
 
     override def visitVariable (node :VariableTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCVariableDecl]
+      val target = if (tree.sym == null) "unknown" else tree.sym.`type`.toString
       buf += <def name={tree.name.toString} type="term"
                   start={tree.getStartPosition.toString}
              ><use name={tree.vartype.toString}
-                   target={tree.sym.`type`.toString}
+                   target={target}
                    start={tree.vartype.getStartPosition.toString}/></def>
     }
 
