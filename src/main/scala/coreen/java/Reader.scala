@@ -33,9 +33,9 @@ object Reader
    * Processes a list of source files.
    * @return a list of {@code <compunit>} elements containing their defs and uses.
    */
-  def process (files :Seq[File]) :List[Elem] = {
+  def process (files :Seq[File], classpath :Seq[File]) :List[Elem] = {
     val fm = compiler.getStandardFileManager(null, null, null) // TODO: args?
-    process0(fm.getJavaFileObjects(files.toArray :_*).asScala.toList)
+    process0(fm.getJavaFileObjects(files.toArray :_*).asScala.toList, classpath)
   }
 
   /**
@@ -43,10 +43,11 @@ object Reader
    * @return a {@code <compunit>} element containing the source code's defs and uses.
    */
   def process (filename :String, content :String) :Elem =
-    process0(List(mkTestObject(filename, content))) head
+    process0(List(mkTestObject(filename, content)), List()) head
 
-  private def process0 (files :List[JavaFileObject]) :List[Elem] = {
-    val options = null // List("-Xjcov").asJava
+  private def process0 (files :List[JavaFileObject], classpath :Seq[File]) :List[Elem] = {
+    val options = if (classpath.length == 0) null
+                  else List("-classpath", classpath.mkString(File.pathSeparator)).asJava
     val task = compiler.getTask(null, null, null, options, null,
                                 files.asJava).asInstanceOf[JavacTask]
     val asts = task.parse.asScala

@@ -3,9 +3,7 @@
 
 package coreen.java
 
-import java.io.{File => JFile, FileWriter, BufferedWriter}
-import scala.tools.nsc.io.{Path, Directory, File}
-import scala.tools.nsc.io.Path._
+import java.io.File
 
 /**
  * Main entry point for Java Reader.
@@ -13,40 +11,38 @@ import scala.tools.nsc.io.Path._
 object Main
 {
   def main (args :Array[String]) {
-    // TODO: fancy args processing
-    if (args.length < 2 || args(0) != "--out") {
-      die("Usage: coreen.java.Main --out outdir file [file ...]")
+    if (args.length != 1) {
+      die("Usage: coreen.java.Main project_root_dir")
     }
 
-    val out = Directory(args(1)).toAbsolute
-    if (!out.isDirectory) die(out + " is not a directory?")
-
-    Reader.process(args drop(2) map(new JFile(_))) foreach { cu =>
-      val path = Path((cu \ "@src") toString).normalize
-      val opath = out / (if (path.isAbsolute) stripPrefix(sharedPrefix(path, out), path) else path)
-      opath.parent.createDirectory()
-      opath.toFile writeAll(cu.toString)
+    // for now we just process every single java file we can find and pass every single jar file
+    // we can find on the classpath to the compiler when doing so; in the future we'll be smart
+    // and try to read Eclipse and other project files, and probably support a metadata format
+    // of our own
+    val root = new File(args(0))
+    val files = collectFiles(root)
+    files get("java") match {
+      case Some(javas) => Reader.process(javas, files getOrElse("jar", List())) foreach(println)
+      case None => println("Found no .java files in " + root)
     }
   }
 
-  private[java] def sharedPrefix (p1 :Path, p2 :Path) = {
-    val p1c = p1.toString.split(JFile.separator)
-    val p2c = p2.toString.split(JFile.separator)
-    Path(p1c zip(p2c) takeWhile(t => t._1 == t._2) map(_._1) mkString(JFile.separator))
+  def collectFiles (file :File) :Map[String,List[File]] = {
+    def suffix (name :String) = name.substring(name.lastIndexOf(".")+1)
+    def collect (file :File) :List[(String,File)] = {
+      if (file.isDirectory) file.listFiles.toList flatMap(collect)
+      else suffix(file.getName) match {
+        case "java" => List(("java", file))
+        case "jar" => List(("jar", file))
+        case _ => List()
+      }
+    }
+    collect(file) groupBy(_._1) mapValues(_.map(_._2))
   }
-
-  private def stripPrefix (prefix :Path, from :Path) =
-    Path(from.toString.substring(prefix.toString.length))
 
   private def die (msg :String) = {
     System.err.println(msg)
     System.exit(255)
     error("Not reached")
-  }
-
-  private def write (text :String, out :JFile) {
-    val os = new BufferedWriter(new FileWriter(out))
-    os.write(text)
-    os.close
   }
 }
