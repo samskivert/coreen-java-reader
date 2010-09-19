@@ -32,12 +32,12 @@ object Main
     def collect (file :File) :List[(String,File)] = {
       if (file.isDirectory) file.listFiles.toList flatMap(collect)
       else suffix(file.getName) match {
-        case "java" => List(("java", file))
-        case "jar" => List(("jar", file))
+        case "java" => List(("java", file.getCanonicalFile))
+        case "jar" => List(("jar", file.getCanonicalFile))
         case _ => List()
       }
     }
-    collect(file) groupBy(_._1) mapValues(_.map(_._2))
+    collect(file) groupBy(_._1) mapValues(_.map(_._2) distinct)
   }
 
   private def die (msg :String) = {
