@@ -4,7 +4,7 @@
 package coreen.java
 
 import java.io.File
-import java.net.URI
+import java.net.{URI, URL}
 
 import javax.tools.JavaFileObject
 import javax.tools.SimpleJavaFileObject
@@ -53,8 +53,9 @@ object Reader
     val asts = task.parse.asScala
     task.analyze
     asts map(ast => {
-      val path = ast.asInstanceOf[JCCompilationUnit].sourcefile.toUri.getPath
-      <compunit src={path}>
+      // TODO: someday we should be able to remove .getPath (or maybe even use toUri.toString)
+      val file = new File(ast.asInstanceOf[JCCompilationUnit].sourcefile.toUri.getPath)
+      <compunit src={file.toURI.toString}>
       {scanner(ast)}
       </compunit>
     }) toList
