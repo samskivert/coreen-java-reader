@@ -19,8 +19,9 @@ import com.sun.source.util.JavacTask
 import com.sun.source.util.TreePathScanner
 import com.sun.tools.javac.tree.JCTree._
 
-import scala.xml.Elem
 import scala.collection.mutable.ArrayBuffer
+import scala.io.Source
+import scala.xml.Elem
 
 import scalaj.collection.Imports._
 
@@ -34,7 +35,7 @@ object Reader
    * @return a list of {@code <compunit>} elements containing their defs and uses.
    */
   def process (files :Seq[File], classpath :Seq[File]) :List[Elem] = {
-    val fm = compiler.getStandardFileManager(null, null, null) // TODO: args?
+    val fm = _compiler.getStandardFileManager(null, null, null) // TODO: args?
     process0(fm.getJavaFileObjects(files.toArray :_*).asScala.toList, classpath)
   }
 
@@ -48,15 +49,16 @@ object Reader
   private def process0 (files :List[JavaFileObject], classpath :Seq[File]) :List[Elem] = {
     val options = if (classpath.length == 0) null
                   else List("-classpath", classpath.mkString(File.pathSeparator)).asJava
-    val task = compiler.getTask(null, null, null, options, null,
-                                files.asJava).asInstanceOf[JavacTask]
+    val task = _compiler.getTask(null, null, null, options, null,
+                                 files.asJava).asInstanceOf[JavacTask]
     val asts = task.parse.asScala
     task.analyze
     asts map(ast => {
       // TODO: someday we should be able to remove .getPath (or maybe even use toUri.toString)
       val file = new File(ast.asInstanceOf[JCCompilationUnit].sourcefile.toUri.getPath)
+      val text = Source.fromFile(file).mkString("")
       <compunit src={file.toURI.toString}>
-      {scanner(ast)}
+      {_scanner.scan(text, ast)}
       </compunit>
     }) toList
   }
@@ -66,10 +68,10 @@ object Reader
       override def getCharContent (ignoreEncodingErrors :Boolean) :CharSequence = content
     }
 
-  // work around Scala's penchant to assign structural types where they are not wanted
-  private val scanner = new TreePathScanner[Unit,ArrayBuffer[Elem]] with (Tree => List[Elem]) {
-    def apply (path :Tree) :List[Elem] = {
+  private class Scanner extends TreePathScanner[Unit,ArrayBuffer[Elem]] {
+    def scan (text :String, path :Tree) :List[Elem] = {
       val buf = ArrayBuffer[Elem]()
+      _text = text
       scan(path, buf)
       buf toList
     }
@@ -79,7 +81,7 @@ object Reader
       _curunit = node.asInstanceOf[JCCompilationUnit]
       buf += <def name={_curunit.packge.toString} type="type"
                   id={_curunit.packge.toString}
-                  start={_curunit.pos.toString}
+                  start={_text.indexOf(_curunit.packge.toString, _curunit.pos).toString}
              >{capture(super.visitCompilationUnit(node, _))}</def>
       _curunit = oldunit
     }
@@ -100,7 +102,7 @@ object Reader
       if (tree.getStartPosition != tree.getEndPosition(_curunit.endPositions)) {
         val name = if (tree.name.toString == "<init>") _curclass.name else tree.name
         buf += <def name={name.toString} type="func"
-                    start={tree.getStartPosition.toString}
+                    start={_text.indexOf(name.toString, tree.getStartPosition).toString}
                >{capture(super.visitMethod(node, _))}</def>
       }
     }
@@ -109,10 +111,11 @@ object Reader
       val tree = node.asInstanceOf[JCVariableDecl]
       val target = if (tree.sym == null) "unknown" else tree.sym.`type`.toString
       buf += <def name={tree.name.toString} type="term"
-                  start={tree.getStartPosition.toString}
+                  start={_text.indexOf(tree.name.toString, tree.getStartPosition).toString}
              ><use name={tree.vartype.toString}
                    target={target}
-                   start={tree.vartype.getStartPosition.toString}/></def>
+                   start={_text.indexOf(tree.vartype.toString,
+                                        tree.vartype.getStartPosition).toString}/></def>
     }
 
     protected def capture (call :ArrayBuffer[Elem] => Unit) = {
@@ -123,7 +126,9 @@ object Reader
 
     protected var _curunit :JCCompilationUnit = _
     protected var _curclass :JCClassDecl = _
+    protected var _text :String = _
   }
 
-  private val compiler = com.sun.tools.javac.api.JavacTool.create
+  private val _scanner = new Scanner
+  private val _compiler = com.sun.tools.javac.api.JavacTool.create
 }
