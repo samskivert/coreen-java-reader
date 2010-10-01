@@ -79,43 +79,58 @@ object Reader
     override def visitCompilationUnit (node :CompilationUnitTree, buf :ArrayBuffer[Elem]) {
       val oldunit = _curunit
       _curunit = node.asInstanceOf[JCCompilationUnit]
-      buf += <def name={_curunit.packge.toString} type="type"
-                  id={_curunit.packge.toString}
-                  start={_text.indexOf(_curunit.packge.toString, _curunit.pos).toString}
-             >{capture(super.visitCompilationUnit(node, _))}</def>
+      withId(_curunit.packge.toString) {
+        buf += <def name={_curunit.packge.toString} type="type" id={_curid}
+                    start={_text.indexOf(_curunit.packge.toString, _curunit.pos).toString}
+               >{capture(super.visitCompilationUnit(node, _))}</def>
+      }
       _curunit = oldunit
     }
 
     override def visitClass (node :ClassTree, buf :ArrayBuffer[Elem]) {
-      val otree = _curclass
+      val oclass = _curclass
       _curclass = node.asInstanceOf[JCClassDecl]
-      buf += <def name={_curclass.name.toString} type="type"
-                  id={_curclass.name.toString}
-                  start={_text.indexOf(_curclass.name.toString, _curclass.pos).toString}
-             >{capture(super.visitClass(node, _))}</def>
-      _curclass = otree
+      withId(_curclass.`type`.toString) {
+        buf += <def name={_curclass.name.toString} type="type" id={_curid}
+                    start={_text.indexOf(_curclass.name.toString, _curclass.pos).toString}
+               >{capture(super.visitClass(node, _))}</def>
+      }
+      _curclass = oclass
     }
 
     override def visitMethod (node :MethodTree, buf :ArrayBuffer[Elem]) {
-      val tree = node.asInstanceOf[JCMethodDecl]
+      val ometh = _curmeth
+      _curmeth = node.asInstanceOf[JCMethodDecl]
       // don't emit a def for synthesized ctors
-      if (tree.getStartPosition != tree.getEndPosition(_curunit.endPositions)) {
-        val name = if (tree.name.toString == "<init>") _curclass.name else tree.name
-        buf += <def name={name.toString} type="func"
-                    start={_text.indexOf(name.toString, tree.getStartPosition).toString}
-               >{capture(super.visitMethod(node, _))}</def>
+      if (_curmeth.getStartPosition != _curmeth.getEndPosition(_curunit.endPositions)) {
+        val name = if (_curmeth.name.toString == "<init>") _curclass.name else _curmeth.name
+        withId(_curclass.`type`.toString + "." + name + _curmeth.`type`.toString) {
+          buf += <def name={name.toString} type="func" id={_curid}
+                      start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
+                 >{capture(super.visitMethod(node, _))}</def>
+        }
       }
+      _curmeth = ometh
     }
 
     override def visitVariable (node :VariableTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCVariableDecl]
       val target = if (tree.sym == null) "unknown" else tree.sym.`type`.toString
-      buf += <def name={tree.name.toString} type="term"
-                  start={_text.indexOf(tree.name.toString, tree.getStartPosition).toString}
-             ><use name={tree.vartype.toString}
-                   target={target}
-                   start={_text.indexOf(tree.vartype.toString,
-                                        tree.vartype.getStartPosition).toString}/></def>
+      withId(_curid + "." + tree.name.toString) {
+        buf += <def name={tree.name.toString} type="term" id={_curid}
+                    start={_text.indexOf(tree.name.toString, tree.getStartPosition).toString}
+               ><use name={tree.vartype.toString}
+                     target={target}
+                     start={_text.indexOf(tree.vartype.toString,
+                                          tree.vartype.getStartPosition).toString}/></def>
+      }
+    }
+
+    protected def withId (id :String)(block : =>Unit) {
+      val oid = _curid
+      _curid = id
+      block
+      _curid = oid
     }
 
     protected def capture (call :ArrayBuffer[Elem] => Unit) = {
@@ -126,6 +141,8 @@ object Reader
 
     protected var _curunit :JCCompilationUnit = _
     protected var _curclass :JCClassDecl = _
+    protected var _curmeth :JCMethodDecl = _
+    protected var _curid :String = _
     protected var _text :String = _
   }
 
