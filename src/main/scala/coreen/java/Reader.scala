@@ -93,9 +93,10 @@ object Reader
       val sig = new StringWriter
       new Pretty(sig, false) {
         override def printBlock (stats :JCList[_ <: JCTree]) { /* noop! */ }
+        override def printEnumBody (stats :JCList[JCTree]) { /* noop! */ }
       }.printExpr(_curclass);
 
-      withId(_curclass.`type`.toString) {
+      withId(_curid + "." + _curclass.name.toString) {
         buf += <def name={_curclass.name.toString} type="type" id={_curid} sig={sig.toString.trim}
                     start={_text.indexOf(_curclass.name.toString, _curclass.pos).toString}
                >{capture(super.visitClass(node, _))}</def>
@@ -115,7 +116,8 @@ object Reader
         }.printExpr(_curmeth);
 
         val name = if (_curmeth.name.toString == "<init>") _curclass.name else _curmeth.name
-        withId(_curclass.`type`.toString + "." + name + _curmeth.`type`.toString) {
+        val methid = (if (_curmeth.`type` == null) "" else _curmeth.`type`).toString
+        withId(_curid + "." + name + methid) {
           buf += <def name={name.toString} type="func" id={_curid} sig={sig.toString.trim}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
                  >{capture(super.visitMethod(node, _))}</def>
