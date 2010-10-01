@@ -4,20 +4,18 @@
 package coreen.java
 
 import java.io.File
+import java.io.StringWriter
 import java.net.{URI, URL}
 
 import javax.tools.JavaFileObject
 import javax.tools.SimpleJavaFileObject
 import javax.tools.ToolProvider
 
-import com.sun.source.tree.ClassTree
-import com.sun.source.tree.CompilationUnitTree
-import com.sun.source.tree.MethodTree
-import com.sun.source.tree.Tree
-import com.sun.source.tree.VariableTree
-import com.sun.source.util.JavacTask
-import com.sun.source.util.TreePathScanner
+import com.sun.source.tree.{ClassTree, CompilationUnitTree, MethodTree, Tree, VariableTree}
+import com.sun.source.util.{JavacTask, TreePathScanner}
+import com.sun.tools.javac.tree.{JCTree, Pretty}
 import com.sun.tools.javac.tree.JCTree._
+import com.sun.tools.javac.util.{List => JCList}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
@@ -81,6 +79,7 @@ object Reader
       _curunit = node.asInstanceOf[JCCompilationUnit]
       withId(_curunit.packge.toString) {
         buf += <def name={_curunit.packge.toString} type="type" id={_curid}
+                    sig={_curunit.packge.toString}
                     start={_text.indexOf(_curunit.packge.toString, _curunit.pos).toString}
                >{capture(super.visitCompilationUnit(node, _))}</def>
       }
@@ -90,8 +89,14 @@ object Reader
     override def visitClass (node :ClassTree, buf :ArrayBuffer[Elem]) {
       val oclass = _curclass
       _curclass = node.asInstanceOf[JCClassDecl]
+
+      val sig = new StringWriter
+      new Pretty(sig, false) {
+        override def printBlock (stats :JCList[_ <: JCTree]) { /* noop! */ }
+      }.printExpr(_curclass);
+
       withId(_curclass.`type`.toString) {
-        buf += <def name={_curclass.name.toString} type="type" id={_curid}
+        buf += <def name={_curclass.name.toString} type="type" id={_curid} sig={sig.toString.trim}
                     start={_text.indexOf(_curclass.name.toString, _curclass.pos).toString}
                >{capture(super.visitClass(node, _))}</def>
       }
@@ -101,11 +106,17 @@ object Reader
     override def visitMethod (node :MethodTree, buf :ArrayBuffer[Elem]) {
       val ometh = _curmeth
       _curmeth = node.asInstanceOf[JCMethodDecl]
+
       // don't emit a def for synthesized ctors
       if (_curmeth.getStartPosition != _curmeth.getEndPosition(_curunit.endPositions)) {
+        val sig = new StringWriter
+        new Pretty(sig, false) {
+          override def printStat (stat :JCTree) { /* noop! */ }
+        }.printExpr(_curmeth);
+
         val name = if (_curmeth.name.toString == "<init>") _curclass.name else _curmeth.name
         withId(_curclass.`type`.toString + "." + name + _curmeth.`type`.toString) {
-          buf += <def name={name.toString} type="func" id={_curid}
+          buf += <def name={name.toString} type="func" id={_curid} sig={sig.toString.trim}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
                  >{capture(super.visitMethod(node, _))}</def>
         }
@@ -116,13 +127,20 @@ object Reader
     override def visitVariable (node :VariableTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCVariableDecl]
       val target = if (tree.sym == null) "unknown" else tree.sym.`type`.toString
+      val tname = tree.vartype.toString
+
+      val oinit = tree.init
+      tree.init = null
+      val sig = tree.toString
+      tree.init = oinit
+
       withId(_curid + "." + tree.name.toString) {
-        buf += <def name={tree.name.toString} type="term" id={_curid}
-                    start={_text.indexOf(tree.name.toString, tree.getStartPosition).toString}
-               ><use name={tree.vartype.toString}
+        buf += <def name={tree.name.toString} type="term" id={_curid} sig={sig}
+                    start={_text.indexOf(tree.name.toString,
+                                         tree.getStartPosition + tname.length).toString}
+               ><use name={tname}
                      target={target}
-                     start={_text.indexOf(tree.vartype.toString,
-                                          tree.vartype.getStartPosition).toString}/></def>
+                     start={_text.indexOf(tname, tree.vartype.getStartPosition).toString}/></def>
       }
     }
 
