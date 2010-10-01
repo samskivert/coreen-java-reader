@@ -78,7 +78,7 @@ object Reader
       val oldunit = _curunit
       _curunit = node.asInstanceOf[JCCompilationUnit]
       withId(_curunit.packge.toString) {
-        buf += <def name={_curunit.packge.toString} type="type" id={_curid}
+        buf += <def name={_curunit.packge.toString} type="module" id={_curid}
                     sig={_curunit.packge.toString}
                     start={_text.indexOf(_curunit.packge.toString, _curunit.pos).toString}
                >{capture(super.visitCompilationUnit(node, _))}</def>
