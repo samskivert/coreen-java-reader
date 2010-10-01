@@ -91,7 +91,7 @@ object Reader
       _curclass = node.asInstanceOf[JCClassDecl]
       buf += <def name={_curclass.name.toString} type="type"
                   id={_curclass.name.toString}
-                  start={_curclass.pos.toString}
+                  start={_text.indexOf(_curclass.name.toString, _curclass.pos).toString}
              >{capture(super.visitClass(node, _))}</def>
       _curclass = otree
     }
