@@ -98,6 +98,7 @@ object Reader
 
       withId(_curid + "." + _curclass.name.toString) {
         buf += <def name={_curclass.name.toString} type="type" id={_curid} sig={sig.toString.trim}
+                    doc={findDoc(_curclass.getStartPosition)}
                     start={_text.indexOf(_curclass.name.toString, _curclass.pos).toString}
                >{capture(super.visitClass(node, _))}</def>
       }
@@ -119,6 +120,7 @@ object Reader
         val methid = (if (_curmeth.`type` == null) "" else _curmeth.`type`).toString
         withId(_curid + "." + name + methid) {
           buf += <def name={name.toString} type="func" id={_curid} sig={sig.toString.trim}
+                      doc={findDoc(_curmeth.getStartPosition)}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
                  >{capture(super.visitMethod(node, _))}</def>
         }
@@ -136,8 +138,9 @@ object Reader
       val sig = tree.toString
       tree.init = oinit
 
+      val doc = if (_curmeth == null) findDoc(tree.getStartPosition) else ""
       withId(_curid + "." + tree.name.toString) {
-        buf += <def name={tree.name.toString} type="term" id={_curid} sig={sig}
+        buf += <def name={tree.name.toString} type="term" id={_curid} sig={sig} doc={doc}
                     start={_text.indexOf(tree.name.toString,
                                          tree.getStartPosition + tname.length).toString}
                ><use name={tname}
@@ -145,6 +148,24 @@ object Reader
                      start={_text.indexOf(tname, tree.vartype.getStartPosition).toString}/></def>
       }
     }
+
+    protected def findDoc (pos :Int) = {
+      val docEnd = _text.lastIndexOf("*/", pos)
+      if (docEnd == -1) ""
+      else {
+        val docToDef = _text.substring(docEnd+2, pos)
+        if (docToDef.trim.length != 0) ""
+        else {
+          val commentStart = _text.lastIndexOf("/*", docEnd)
+          val docStart = _text.lastIndexOf("/**", docEnd)
+          if (docStart != commentStart) ""
+          else trimDoc(_text.substring(docStart+3, docEnd))
+        }
+      }
+    }
+    protected def trimDoc (text :String) =
+      text.split(_lineSeparator).map(_.trim).map(snipStar).filter(_.length != 0).mkString(" ")
+    protected def snipStar (l :String) = if (l.startsWith("*")) l.substring(1).trim else l
 
     protected def withId (id :String)(block : =>Unit) {
       val oid = _curid
@@ -168,4 +189,5 @@ object Reader
 
   private val _scanner = new Scanner
   private val _compiler = com.sun.tools.javac.api.JavacTool.create
+  private val _lineSeparator = System.getProperty("line.separator")
 }
