@@ -4,6 +4,7 @@
 package coreen.java
 
 import java.io.File
+import scala.xml.PrettyPrinter
 
 /**
  * Main entry point for Java Reader.
@@ -30,8 +31,10 @@ object Main
     // of our own
     val root = new File(args(0))
     val files = collectFiles(root, filter)
+    val pp = new PrettyPrinter(999, 2)
     files get("java") match {
-      case Some(javas) => Reader.process(javas, files getOrElse("jar", List())) foreach(println)
+      case Some(javas) => Reader.process(javas, files getOrElse("jar", List())) foreach(
+        e => println(pp.format(e)))
       case None => println("Found no .java files in " + root)
     }
   }
