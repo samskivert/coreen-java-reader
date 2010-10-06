@@ -3,6 +3,8 @@
 
 package coreen.java
 
+import scala.xml.{Elem, PrettyPrinter}
+
 import org.scalatest.FlatSpec
 import org.scalatest.matchers.ShouldMatchers
 
@@ -30,7 +32,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
 
   "Reader" should "handle this code" in {
     val cunit = Reader.process("TestA.java", testA)
-    println(new scala.xml.PrettyPrinter(100, 2).format(cunit))
+    // println(pretty(cunit))
 
     val pkg = (cunit \ "def").head
     (pkg \ "@name").text should equal("foo.bar")
@@ -47,4 +49,45 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     (innerB \ "@name").text should equal("B")
     (innerB \ "def" \ "@name").text should equal("noop")
   }
+
+  val testB = """
+  package test;
+  @Deprecated
+  public interface Foo {
+    public String bar ();
+  }
+  """
+
+  "Reader" should "correctly obtain start pos for annotated class" in {
+    val cunit = Reader.process("Foo.java", testB)
+    val pkg = (cunit \ "def").head
+    val clazz = (pkg \ "def").head
+    testB.indexOf("@Deprecated") should equal((clazz \ "@bodyStart").text.toInt)
+  }
+
+  val missing = """
+  package test;
+  import com.nonexist.Bar;
+  public class Foo {
+    public static void main (String[] args) {
+      Bar bar = new Bar();
+      System.err.println(bar);
+    }
+  }
+  """
+
+  "Reader" should "partially process code with missing depends" in {
+    println("---- compiler output, ignore ----")
+    val cunit = Reader.process("Foo.java", missing)
+    println("------ end compiler output ------")
+    val pkg = (cunit \ "def").head
+    (pkg \ "@name").text should equal("test")
+    val outer = (pkg \ "def").head
+    (outer \ "@name").text should equal("Foo");
+    val main = (outer \ "def").head
+    val bar = (main \ "def").tail.head
+    (bar \ "@sig").text should equal("Bar bar") // no type info for 'Bar'
+  }
+
+  protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)
 }

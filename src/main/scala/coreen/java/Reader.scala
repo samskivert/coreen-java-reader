@@ -13,12 +13,12 @@ import javax.tools.ToolProvider
 
 import com.sun.source.tree.{ClassTree, CompilationUnitTree, MethodTree, Tree, VariableTree}
 import com.sun.source.util.{JavacTask, TreePathScanner}
-import com.sun.tools.javac.tree.{JCTree, Pretty}
+import com.sun.tools.javac.code.Flags
 import com.sun.tools.javac.tree.JCTree._
+import com.sun.tools.javac.tree.{JCTree, Pretty}
 import com.sun.tools.javac.util.{List => JCList}
 
 import scala.collection.mutable.ArrayBuffer
-import scala.io.Source
 import scala.xml.Elem
 
 import scalaj.collection.Imports._
@@ -45,20 +45,28 @@ object Reader
     process0(List(mkTestObject(filename, content)), List()) head
 
   private def process0 (files :List[JavaFileObject], classpath :Seq[File]) :List[Elem] = {
-    val options = if (classpath.length == 0) null
-                  else List("-classpath", classpath.mkString(File.pathSeparator)).asJava
-    val task = _compiler.getTask(null, null, null, options, null,
-                                 files.asJava).asInstanceOf[JavacTask]
+    val cpopt = if (classpath.length == 0) Nil
+                else List("-classpath", classpath.mkString(File.pathSeparator))
+    val options = List("-Xjcov") ++ cpopt
+    val task = _compiler.getTask(
+      null, null, null, options.asJava, null, files.asJava).asInstanceOf[JavacTask]
     val asts = task.parse.asScala
     task.analyze
+
+    // annoyingly, there's no (public) way to tell the task that we're done without generating
+    // .class files, so instead we have to do this reach around
+    val endContext = task.getClass.getDeclaredMethods.find(_.getName == "endContext").head
+    endContext.setAccessible(true)
+    endContext.invoke(task)
+
     asts map(ast => {
+      val text = ast.asInstanceOf[JCCompilationUnit].sourcefile.getCharContent(true).toString
       // TODO: someday we should be able to remove .getPath (or maybe even use toUri.toString)
       val file = new File(ast.asInstanceOf[JCCompilationUnit].sourcefile.toUri.getPath)
-      val text = Source.fromFile(file).mkString("")
       <compunit src={file.toURI.toString}>
       {_scanner.scan(text, ast)}
       </compunit>
-    }) toList
+    }) toList;
   }
 
   private def mkTestObject (file :String, content :String) =
@@ -100,6 +108,8 @@ object Reader
         buf += <def name={_curclass.name.toString} type="type" id={_curid} sig={sig.toString.trim}
                     doc={findDoc(_curclass.getStartPosition)}
                     start={_text.indexOf(_curclass.name.toString, _curclass.pos).toString}
+                    bodyStart={_curclass.getStartPosition.toString}
+                    bodyEnd={_curclass.getEndPosition(_curunit.endPositions).toString}
                >{capture(super.visitClass(node, _))}</def>
       }
       _curclass = oclass
@@ -110,7 +120,7 @@ object Reader
       _curmeth = node.asInstanceOf[JCMethodDecl]
 
       // don't emit a def for synthesized ctors
-      if (_curmeth.getStartPosition != _curmeth.getEndPosition(_curunit.endPositions)) {
+      if ((_curmeth.mods.flags & Flags.GENERATEDCONSTR) == 0) {
         val sig = new StringWriter
         new Pretty(sig, false) {
           override def printStat (stat :JCTree) { /* noop! */ }
@@ -122,6 +132,8 @@ object Reader
           buf += <def name={name.toString} type="func" id={_curid} sig={sig.toString.trim}
                       doc={findDoc(_curmeth.getStartPosition)}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
+                      bodyStart={_curmeth.getStartPosition.toString}
+                      bodyEnd={_curmeth.getEndPosition(_curunit.endPositions).toString}
                  >{capture(super.visitMethod(node, _))}</def>
         }
       }
@@ -143,6 +155,8 @@ object Reader
         buf += <def name={tree.name.toString} type="term" id={_curid} sig={sig} doc={doc}
                     start={_text.indexOf(tree.name.toString,
                                          tree.getStartPosition + tname.length).toString}
+                    bodyStart={tree.getStartPosition.toString}
+                    bodyEnd={tree.getEndPosition(_curunit.endPositions).toString}
                ><use name={tname}
                      target={target}
                      start={_text.indexOf(tname, tree.vartype.getStartPosition).toString}/></def>
