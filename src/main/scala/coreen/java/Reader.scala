@@ -7,6 +7,7 @@ import java.io.File
 import java.io.StringWriter
 import java.net.{URI, URL}
 
+import javax.lang.model.element.ElementKind
 import javax.tools.JavaFileObject
 import javax.tools.SimpleJavaFileObject
 import javax.tools.ToolProvider
@@ -170,7 +171,12 @@ object Reader
           tree.sym != null) {
         val target = tree.sym match {
           case cs :ClassSymbol => tree.sym.`type`.toString
-          case vs :VarSymbol => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
+          case vs :VarSymbol => vs.getKind match {
+            case ElementKind.FIELD => vs.owner + "." + tree.name
+            // ENUM_CONSTANT: TODO
+            // EXCEPTION_PARAMETER, PARAMETER, LOCAL_VARIABLE (all in symtab)
+            case _ => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
+          }
           case _ => tree.sym.`type`.toString // TODO
         }
         buf += <use name={tree.name.toString} target={target}
@@ -183,6 +189,7 @@ object Reader
     //   super.visitMethodInvocation(node, buf)
     // }
     override def visitMemberSelect (node :MemberSelectTree, buf :ArrayBuffer[Elem]) {
+      super.visitMemberSelect(node, buf)
       val tree = node.asInstanceOf[JCFieldAccess]
       if (_curclass != null && // make sure we're not looking at an import
           tree.sym != null) {
@@ -194,7 +201,6 @@ object Reader
         buf += <use name={tree.name.toString} target={target}
                     start={_text.indexOf(tree.name.toString, selend).toString}/>
       }
-      super.visitMemberSelect(node, buf)
     }
 
     protected def findDoc (pos :Int) = {
