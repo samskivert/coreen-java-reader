@@ -172,7 +172,8 @@ object Reader
 
     override def visitIdentifier (node :IdentifierTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCIdent]
-      if (tree.sym != null) {
+      if (_curclass != null && // make sure we're not looking at an import
+          tree.sym != null) {
         val target = tree.sym match {
           case cs :ClassSymbol => tree.sym.`type`.toString
           case vs :VarSymbol => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
@@ -189,13 +190,15 @@ object Reader
     // }
     override def visitMemberSelect (node :MemberSelectTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCFieldAccess]
-      if (tree.sym != null) {
+      if (_curclass != null && // make sure we're not looking at an import
+          tree.sym != null) {
         val target = tree.sym match {
           case ms :MethodSymbol => ms.owner + "." + ms.name + ms.`type`
           case _ => tree.sym.toString // TODO
         }
+        val selend = tree.selected.getEndPosition(_curunit.endPositions)
         buf += <use name={tree.name.toString} target={target}
-                    start={tree.getStartPosition.toString}/>
+                    start={_text.indexOf(tree.name.toString, selend).toString}/>
       }
       super.visitMemberSelect(node, buf)
     }
