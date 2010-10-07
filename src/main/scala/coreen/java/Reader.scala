@@ -20,7 +20,7 @@ import com.sun.tools.javac.tree.{JCTree, Pretty}
 import com.sun.tools.javac.util.{List => JCList}
 
 import scala.collection.mutable.{ArrayBuffer, Map => MMap}
-import scala.xml.Elem
+import scala.xml.{Elem, NodeSeq}
 
 import scalaj.collection.Imports._
 
@@ -147,26 +147,20 @@ object Reader
 
     override def visitVariable (node :VariableTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCVariableDecl]
-      val target = if (tree.sym == null) "unknown" else tree.sym.`type`.toString
-      val tname = tree.vartype.toString
-
       val oinit = tree.init
-      tree.init = null
-      val sig = tree.toString
-      tree.init = oinit
+      val sig = try { tree.init = null ; tree.toString } finally { tree.init = oinit }
 
       val doc = if (_curmeth == null) findDoc(tree.getStartPosition) else ""
       withId(_curid + "." + tree.name.toString) {
-        // add a mapping for this vardef
+        // add a symtab mapping for this vardef
         if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
+        val varend = tree.vartype.getEndPosition(_curunit.endPositions)
         buf += <def name={tree.name.toString} type="term" id={_curid} sig={sig} doc={doc}
-                    start={_text.indexOf(tree.name.toString,
-                                         tree.getStartPosition + tname.length).toString}
+                    start={_text.indexOf(tree.name.toString, varend).toString}
                     bodyStart={tree.getStartPosition.toString}
                     bodyEnd={tree.getEndPosition(_curunit.endPositions).toString}
-               ><use name={tname}
-                     target={target}
-                     start={_text.indexOf(tname, tree.vartype.getStartPosition).toString}/></def>
+               >{ if ((tree.mods.flags & Flags.ENUM) != 0) NodeSeq.Empty
+                  else capture(super.visitVariable(node, _)) }</def>
       }
     }
 
