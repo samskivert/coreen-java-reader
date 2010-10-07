@@ -11,14 +11,15 @@ import javax.tools.JavaFileObject
 import javax.tools.SimpleJavaFileObject
 import javax.tools.ToolProvider
 
-import com.sun.source.tree.{ClassTree, CompilationUnitTree, MethodTree, Tree, VariableTree}
+import com.sun.source.tree._
 import com.sun.source.util.{JavacTask, TreePathScanner}
 import com.sun.tools.javac.code.Flags
+import com.sun.tools.javac.code.Symbol._
 import com.sun.tools.javac.tree.JCTree._
 import com.sun.tools.javac.tree.{JCTree, Pretty}
 import com.sun.tools.javac.util.{List => JCList}
 
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ArrayBuffer, Map => MMap}
 import scala.xml.Elem
 
 import scalaj.collection.Imports._
@@ -94,7 +95,7 @@ object Reader
       _curunit = oldunit
     }
 
-    override def visitClass (node :ClassTree, buf :ArrayBuffer[Elem]) {
+    override def visitClass (node :ClassTree, buf :ArrayBuffer[Elem]) = withScope {
       val oclass = _curclass
       _curclass = node.asInstanceOf[JCClassDecl]
 
@@ -115,7 +116,7 @@ object Reader
       _curclass = oclass
     }
 
-    override def visitMethod (node :MethodTree, buf :ArrayBuffer[Elem]) {
+    override def visitMethod (node :MethodTree, buf :ArrayBuffer[Elem]) = withScope {
       val ometh = _curmeth
       _curmeth = node.asInstanceOf[JCMethodDecl]
 
@@ -140,6 +141,10 @@ object Reader
       _curmeth = ometh
     }
 
+    override def visitBlock (node :BlockTree, buf :ArrayBuffer[Elem]) {
+      withScope(super.visitBlock(node, buf))
+    }
+
     override def visitVariable (node :VariableTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCVariableDecl]
       val target = if (tree.sym == null) "unknown" else tree.sym.`type`.toString
@@ -152,6 +157,8 @@ object Reader
 
       val doc = if (_curmeth == null) findDoc(tree.getStartPosition) else ""
       withId(_curid + "." + tree.name.toString) {
+        // add a mapping for this vardef
+        if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
         buf += <def name={tree.name.toString} type="term" id={_curid} sig={sig} doc={doc}
                     start={_text.indexOf(tree.name.toString,
                                          tree.getStartPosition + tname.length).toString}
@@ -161,6 +168,32 @@ object Reader
                      target={target}
                      start={_text.indexOf(tname, tree.vartype.getStartPosition).toString}/></def>
       }
+    }
+
+    override def visitIdentifier (node :IdentifierTree, buf :ArrayBuffer[Elem]) {
+      val tree = node.asInstanceOf[JCIdent]
+      if (tree.sym != null) {
+        val target = tree.sym match {
+          case cs :ClassSymbol => tree.sym.`type`.toString
+          case vs :VarSymbol => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
+          case _ => tree.sym.`type`.toString // TODO
+        }
+        buf += <use name={tree.name.toString} target={target}
+                    start={tree.getStartPosition.toString}/>
+      }
+    }
+
+    // override def visitMethodInvocation (node :MethodInvocationTree, buf :ArrayBuffer[Elem]) {
+    //   val tree = node.asInstanceOf[JCMethodInvocation]
+    //   super.visitMethodInvocation(node, buf)
+    // }
+    override def visitMemberSelect (node :MemberSelectTree, buf :ArrayBuffer[Elem]) {
+      val tree = node.asInstanceOf[JCFieldAccess]
+      if (tree.sym != null) {
+        val id = tree.sym.owner.toString + "." + tree.sym.name.toString + tree.sym.`type`.toString
+        buf += <use name={tree.name.toString} target={id} start={tree.getStartPosition.toString}/>
+      }
+      super.visitMemberSelect(node, buf)
     }
 
     protected def findDoc (pos :Int) = {
@@ -188,6 +221,12 @@ object Reader
       _curid = oid
     }
 
+    protected def withScope (block : => Unit) {
+      _symtab = MMap[VarSymbol,String]() :: _symtab
+      block
+      _symtab = _symtab.tail
+    }
+
     protected def capture (call :ArrayBuffer[Elem] => Unit) = {
       val sbuf = ArrayBuffer[Elem]()
       call(sbuf)
@@ -197,6 +236,7 @@ object Reader
     protected var _curunit :JCCompilationUnit = _
     protected var _curclass :JCClassDecl = _
     protected var _curmeth :JCMethodDecl = _
+    protected var _symtab :List[MMap[VarSymbol,String]] = Nil
     protected var _curid :String = _
     protected var _text :String = _
   }
