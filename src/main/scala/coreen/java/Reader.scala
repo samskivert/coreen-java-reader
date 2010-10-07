@@ -190,8 +190,12 @@ object Reader
     override def visitMemberSelect (node :MemberSelectTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCFieldAccess]
       if (tree.sym != null) {
-        val id = tree.sym.owner.toString + "." + tree.sym.name.toString + tree.sym.`type`.toString
-        buf += <use name={tree.name.toString} target={id} start={tree.getStartPosition.toString}/>
+        val target = tree.sym match {
+          case ms :MethodSymbol => ms.owner + "." + ms.name + ms.`type`
+          case _ => tree.sym.toString // TODO
+        }
+        buf += <use name={tree.name.toString} target={target}
+                    start={tree.getStartPosition.toString}/>
       }
       super.visitMemberSelect(node, buf)
     }
