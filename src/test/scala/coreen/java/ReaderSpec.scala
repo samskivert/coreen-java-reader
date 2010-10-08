@@ -126,6 +126,24 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val cunit = Reader.process("Foo.java", thisEx)
     val pkg = (cunit \ "def").head
     val clazz = (pkg \ "def").head
+    // println(pretty(cunit))
+  }
+
+  val anonEx = """
+  package test;
+  public class Foo {
+    public Foo () {
+      Object foo = new Runnable() {
+        public void run () {}
+      };
+    }
+  }
+  """
+
+  "Reader" should "correctly handle anonymous inner classes" in {
+    val cunit = Reader.process("Foo.java", anonEx)
+    val pkg = (cunit \ "def").head
+    val clazz = (pkg \ "def").head
     println(pretty(cunit))
   }
 

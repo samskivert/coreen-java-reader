@@ -106,15 +106,29 @@ object Reader
         override def printEnumBody (stats :JCList[JCTree]) { /* noop! */ }
       }.printExpr(_curclass);
 
-      withId(_curid + "." + _curclass.name.toString) {
-        buf += <def name={_curclass.name.toString} type="type" id={_curid} sig={sig.toString.trim}
+      val isAnon = _curclass.name.toString == ""
+      val clid = if (isAnon) {
+        _anoncount += 1
+        oclass.name + "$" + _anoncount
+      } else _curclass.name.toString
+
+      val cname = if (isAnon) {
+        if (_curclass.extending != null) _curclass.extending.toString
+        else _curclass.implementing.toString
+      } else clid
+
+      val ocount = _anoncount
+      _anoncount = 0
+      withId(_curid + "." + clid) {
+        buf += <def name={cname} type="type" id={_curid} sig={sig.toString.trim}
                     doc={findDoc(_curclass.getStartPosition)}
-                    start={_text.indexOf(_curclass.name.toString, _curclass.pos).toString}
+                    start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
                     bodyStart={_curclass.getStartPosition.toString}
                     bodyEnd={_curclass.getEndPosition(_curunit.endPositions).toString}
                >{capture(super.visitClass(node, _))}</def>
       }
       _curclass = oclass
+      _anoncount = ocount
     }
 
     override def visitMethod (node :MethodTree, buf :ArrayBuffer[Elem]) = withScope {
@@ -241,6 +255,7 @@ object Reader
 
     protected var _curunit :JCCompilationUnit = _
     protected var _curclass :JCClassDecl = _
+    protected var _anoncount = 0
     protected var _curmeth :JCMethodDecl = _
     protected var _symtab :List[MMap[VarSymbol,String]] = Nil
     protected var _curid :String = _
