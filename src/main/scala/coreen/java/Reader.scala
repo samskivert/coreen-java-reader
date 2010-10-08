@@ -204,16 +204,6 @@ object Reader
         println("TODOOZ " + name + " " + sym.getClass)
         sym.toString // TODO
       }
-      // match {
-      //     case cs :ClassSymbol => tree.sym.`type`.toString
-      //     case vs :VarSymbol => vs.getKind match {
-      //       case ElementKind.FIELD => vs.owner + "." + tree.name
-      //       // ENUM_CONSTANT: TODO
-      //       // EXCEPTION_PARAMETER, PARAMETER, LOCAL_VARIABLE (all in symtab)
-      //       case _ => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
-      //     }
-      //     case _ => tree.sym.`type`.toString // TODO
-      //   }
     }
 
     protected def findDoc (pos :Int) = {
