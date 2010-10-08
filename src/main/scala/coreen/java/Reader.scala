@@ -14,11 +14,11 @@ import javax.tools.ToolProvider
 
 import com.sun.source.tree._
 import com.sun.source.util.{JavacTask, TreePathScanner}
-import com.sun.tools.javac.code.Flags
+import com.sun.tools.javac.code.{Flags, Symbol}
 import com.sun.tools.javac.code.Symbol._
 import com.sun.tools.javac.tree.JCTree._
 import com.sun.tools.javac.tree.{JCTree, Pretty}
-import com.sun.tools.javac.util.{List => JCList}
+import com.sun.tools.javac.util.{List => JCList, Name}
 
 import scala.collection.mutable.{ArrayBuffer, Map => MMap}
 import scala.xml.{Elem, NodeSeq}
@@ -169,16 +169,7 @@ object Reader
       val tree = node.asInstanceOf[JCIdent]
       if (_curclass != null && // make sure we're not looking at an import
           tree.sym != null) {
-        val target = tree.sym match {
-          case cs :ClassSymbol => tree.sym.`type`.toString
-          case vs :VarSymbol => vs.getKind match {
-            case ElementKind.FIELD => vs.owner + "." + tree.name
-            // ENUM_CONSTANT: TODO
-            // EXCEPTION_PARAMETER, PARAMETER, LOCAL_VARIABLE (all in symtab)
-            case _ => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
-          }
-          case _ => tree.sym.`type`.toString // TODO
-        }
+        val target = targetForSym(tree.name, tree.sym)
         buf += <use name={tree.name.toString} target={target}
                     start={tree.getStartPosition.toString}/>
       }
@@ -193,14 +184,36 @@ object Reader
       val tree = node.asInstanceOf[JCFieldAccess]
       if (_curclass != null && // make sure we're not looking at an import
           tree.sym != null) {
-        val target = tree.sym match {
-          case ms :MethodSymbol => ms.owner + "." + ms.name + ms.`type`
-          case _ => tree.sym.toString // TODO
-        }
+        val target = targetForSym(tree.name, tree.sym)
         val selend = tree.selected.getEndPosition(_curunit.endPositions)
         buf += <use name={tree.name.toString} target={target}
                     start={_text.indexOf(tree.name.toString, selend).toString}/>
       }
+    }
+
+    protected def targetForSym (name :Name, sym :Symbol) = sym match {
+      case cs :ClassSymbol => cs.`type`.toString
+      case ms :MethodSymbol => ms.owner + "." + ms.name + ms.`type`
+      case vs :VarSymbol => vs.getKind match {
+        case ElementKind.FIELD => vs.owner + "." + name
+        // ENUM_CONSTANT: TODO
+        // EXCEPTION_PARAMETER, PARAMETER, LOCAL_VARIABLE (all in symtab)
+        case _ => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
+      }
+      case _ => {
+        println("TODOOZ " + name + " " + sym.getClass)
+        sym.toString // TODO
+      }
+      // match {
+      //     case cs :ClassSymbol => tree.sym.`type`.toString
+      //     case vs :VarSymbol => vs.getKind match {
+      //       case ElementKind.FIELD => vs.owner + "." + tree.name
+      //       // ENUM_CONSTANT: TODO
+      //       // EXCEPTION_PARAMETER, PARAMETER, LOCAL_VARIABLE (all in symtab)
+      //       case _ => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
+      //     }
+      //     case _ => tree.sym.`type`.toString // TODO
+      //   }
     }
 
     protected def findDoc (pos :Int) = {
