@@ -175,10 +175,6 @@ object Reader
       }
     }
 
-    // override def visitMethodInvocation (node :MethodInvocationTree, buf :ArrayBuffer[Elem]) {
-    //   val tree = node.asInstanceOf[JCMethodInvocation]
-    //   super.visitMethodInvocation(node, buf)
-    // }
     override def visitMemberSelect (node :MemberSelectTree, buf :ArrayBuffer[Elem]) {
       super.visitMemberSelect(node, buf)
       val tree = node.asInstanceOf[JCFieldAccess]
