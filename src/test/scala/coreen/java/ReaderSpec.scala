@@ -150,9 +150,15 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
   val docEx = """
   package test;
   /** This has some code {@code foo < bar}. And some more code {@code bar > foo}.
-   * And a {@literal <literal>}. */
+   * And a {@literal <literal>}.
+   * @author And Mr Author
+   * @since 9.99
+   */
   public class Foo {
-    public Foo () {
+    /** This makes a foo.
+     * @param monkey a monkey for your foo.
+     */
+    public Foo (String monkey) {
       Object foo = new Runnable() {
         public void run () {}
       };
@@ -164,10 +170,12 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val cunit = Reader.process("Foo.java", docEx)
     val pkg = (cunit \ "def").head
     val clazz = (pkg \ "def").head
-    val doc = (clazz \ "@doc").text
-    doc should equal("This has some code <code>foo &lt; bar</code>. " +
-                     "And some more code <code>bar &gt; foo</code>. " +
-                     "And a &lt;literal&gt;.")
+    (clazz \ "@doc").text should equal("This has some code <code>foo &lt; bar</code>. " +
+                                       "And some more code <code>bar &gt; foo</code>. " +
+                                       "And a &lt;literal&gt;.") // @author and @since stripped
+    val ctor = (clazz \ "def").head
+    (ctor \ "@doc").text should equal("This makes a foo.<br/>\n" + // TEMP @param hackery
+                                      "<b>Param</b>: monkey a monkey for your foo.")
   }
 
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)

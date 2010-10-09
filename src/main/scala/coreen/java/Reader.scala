@@ -243,19 +243,59 @@ object Reader
      * strips at tags (at param etc. will be handled later, and you can look at the full source for
      * at author, etc.). */
     protected def processDoc (text :String) = {
-      val m = _codePat.matcher(text)
+      // first expand brace tag patterns
+      val btm = _braceTagPat.matcher(text)
       val sb = new StringBuffer
-      while (m.find) {
-        val escaped = escapeEntities(m.group(2))
-        val (start, end) = if (m.group(1) == "code") ("<code>", "</code>") else ("", "")
-        m.appendReplacement(sb, start + escaped + end)
+      while (btm.find) {
+        val escaped = escapeEntities(btm.group(2))
+        val (start, end) = btm.group(1) match {
+          case "code" => ("<code>", "</code>")
+          case "link" => ("<code><u>", "</u></code>") // TODO: magic
+          case "linkplain" => ("<u>", "</u>")         // TODO: same magic
+          case "value" => ("<code>", "</code>")       // TODO: yet more magic
+          case _ => ("", "") // link, etc?
+        }
+        btm.appendReplacement(sb, start + escaped + end)
       }
-      m.appendTail(sb)
-      sb.toString
+      btm.appendTail(sb)
+      val etext = sb.toString
+
+      // now look for a block tags section and process it
+      val tm = _tagPat.matcher(etext)
+      if (!tm.find) etext
+      else {
+        val pretext = etext.substring(0, tm.start).trim
+        var tstart = tm.start
+        var tend = tm.end
+        var tags = new ArrayBuffer[(String,String)]()
+        while (tm.find) {
+          tags += Pair(etext.substring(tstart, tend), etext.substring(tend, tm.start).trim)
+          tstart = tm.start
+          tend = tm.end
+        }
+        tags += Pair(etext.substring(tstart, tend), etext.substring(tend).trim)
+
+        val sep = "<br/>\n"
+        val tagText = tags.map(_ match { case (tag, text) => tag match {
+          case "@deprecated" => "<b>Deprecated</b>: " + text
+          case "@exception" | "@throws" => "<b>Throws</b>: " + text // TODO: magic
+          case "@param" => "<b>Param</b>: " + text // TODO: magic
+          case "@return" => "<b>Returns</b>: " + text
+          case "@see" => "<b>See</b>: <code>" + text + "</code>" // TODO: magic
+          case "@author" | "@serial" | "@serialData" | "@serialField" | "@since" |
+               "@version" => ""
+        }}).flatten.mkString(sep)
+
+        if (pretext.length == 0) tagText else (pretext + sep + tagText)
+      }
     }
-    // TODO: I think this may need to become a full parser since it may match braces inside an at
-    // code block. Sigh..
-    private val _codePat = Pattern.compile("""\{@(code|literal)\s([^}]*)\}""", Pattern.DOTALL)
+
+    // TODO: this may need to be a full parser since it may match braces inside an @code block
+    private val _braceTagPat = Pattern.compile(
+      """\{@(code|link|linkplain|literal|value)\s([^}]*)\}""", Pattern.DOTALL)
+    private val _tagPat = Pattern.compile(
+      """@(author|deprecated|exception|param|return|see|serial|serialData|serialField|""" +
+      """since|throws|version)""")
 
     protected def escapeEntities (text :String) =
       text.replaceAll("&","&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").
