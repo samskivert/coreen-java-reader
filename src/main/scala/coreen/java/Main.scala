@@ -17,8 +17,7 @@ object Main
     }
 
     // set up a filter function if any path prefixes were provided
-    val filters = if (args(0) == "/usr/local/java") Array("src/java") // hack!
-                  else args drop(1)
+    val filters = args drop(1)
     val filter = if (filters.isEmpty) (path :String) => true
                  else (path :String) => path.startsWith(args(0)) && {
                    val relpath = stripFS(path.substring(args(0).length))
