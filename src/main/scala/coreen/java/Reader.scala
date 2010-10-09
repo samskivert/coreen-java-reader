@@ -251,7 +251,9 @@ object Reader
       m.appendTail(sb)
       sb.toString
     }
-    private val _codePat = Pattern.compile("""\{@code\s(.*)\}""", Pattern.DOTALL)
+    // TODO: I think this may need to become a full parser since it may match braces inside an at
+    // code block. Sigh..
+    private val _codePat = Pattern.compile("""\{@code\s([^}]*)\}""", Pattern.DOTALL)
 
     protected def escapeEntities (text :String) =
       text.replaceAll("&","&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").
