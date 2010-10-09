@@ -246,14 +246,16 @@ object Reader
       val m = _codePat.matcher(text)
       val sb = new StringBuffer
       while (m.find) {
-        m.appendReplacement(sb, "<code>" + escapeEntities(m.group(1)) + "</code>")
+        val escaped = escapeEntities(m.group(2))
+        val (start, end) = if (m.group(1) == "code") ("<code>", "</code>") else ("", "")
+        m.appendReplacement(sb, start + escaped + end)
       }
       m.appendTail(sb)
       sb.toString
     }
     // TODO: I think this may need to become a full parser since it may match braces inside an at
     // code block. Sigh..
-    private val _codePat = Pattern.compile("""\{@code\s([^}]*)\}""", Pattern.DOTALL)
+    private val _codePat = Pattern.compile("""\{@(code|literal)\s([^}]*)\}""", Pattern.DOTALL)
 
     protected def escapeEntities (text :String) =
       text.replaceAll("&","&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").

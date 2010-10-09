@@ -149,7 +149,8 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
 
   val docEx = """
   package test;
-  /** This has some code {@code foo < bar}. And some more code {@code bar > foo}. */
+  /** This has some code {@code foo < bar}. And some more code {@code bar > foo}.
+   * And a {@literal <literal>}. */
   public class Foo {
     public Foo () {
       Object foo = new Runnable() {
@@ -165,7 +166,8 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val clazz = (pkg \ "def").head
     val doc = (clazz \ "@doc").text
     doc should equal("This has some code <code>foo &lt; bar</code>. " +
-                     "And some more code <code>bar &gt; foo</code>.")
+                     "And some more code <code>bar &gt; foo</code>. " +
+                     "And a &lt;literal&gt;.")
   }
 
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)
