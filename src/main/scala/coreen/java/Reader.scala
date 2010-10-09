@@ -216,7 +216,7 @@ object Reader
         case _ => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
       }
       case _ => {
-        println("TODOOZ " + name + " " + sym.getClass)
+        // println("TODOOZ " + name + " " + sym.getClass)
         sym.toString // TODO
       }
     }
@@ -231,7 +231,18 @@ object Reader
           val commentStart = _text.lastIndexOf("/*", docEnd)
           val docStart = _text.lastIndexOf("/**", docEnd)
           if (docStart != commentStart) ""
-          else processDoc(trimDoc(_text.substring(docStart+3, docEnd)))
+          else {
+            val doc = trimDoc(_text.substring(docStart+3, docEnd))
+            try {
+              processDoc(doc)
+            } catch {
+              case e => {
+                e.printStackTrace(System.out)
+                println(doc)
+                doc
+              }
+            }
+          }
         }
       }
     }
@@ -255,7 +266,7 @@ object Reader
           case "value" => ("<code>", "</code>")       // TODO: yet more magic
           case _ => ("", "") // link, etc?
         }
-        btm.appendReplacement(sb, start + escaped + end)
+        btm.appendReplacement(sb, Matcher.quoteReplacement(start + escaped + end))
       }
       btm.appendTail(sb)
       val etext = sb.toString
@@ -264,7 +275,7 @@ object Reader
       val tm = _tagPat.matcher(etext)
       if (!tm.find) etext
       else {
-        val pretext = etext.substring(0, tm.start).trim
+        val preText = etext.substring(0, tm.start).trim
         var tstart = tm.start
         var tend = tm.end
         var tags = new ArrayBuffer[(String,String)]()
@@ -277,16 +288,17 @@ object Reader
 
         val sep = "<br/>\n"
         val tagText = tags.map(_ match { case (tag, text) => tag match {
-          case "@deprecated" => "<b>Deprecated</b>: " + text
-          case "@exception" | "@throws" => "<b>Throws</b>: " + text // TODO: magic
-          case "@param" => "<b>Param</b>: " + text // TODO: magic
-          case "@return" => "<b>Returns</b>: " + text
-          case "@see" => "<b>See</b>: <code>" + text + "</code>" // TODO: magic
-          case "@author" | "@serial" | "@serialData" | "@serialField" | "@since" |
-               "@version" => ""
+          case "@deprecated" => Some("<b>Deprecated</b>: " + text)
+          case "@exception"
+             | "@throws"     => Some("<b>Throws</b>: " + text) // TODO: magic
+          case "@param"      => Some("<b>Param</b>: " + text) // TODO: magic
+          case "@return"     => Some("<b>Returns</b>: " + text)
+          case "@see"        => Some("<b>See</b>: <code>" + text + "</code>") // TODO: magic
+          case "@author" | "@serial" | "@serialData" | "@serialField" | "@since"
+             | "@version" => None
         }}).flatten.mkString(sep)
 
-        if (pretext.length == 0) tagText else (pretext + sep + tagText)
+        preText + (if (!preText.isEmpty && !tagText.isEmpty) sep else "") + tagText
       }
     }
 

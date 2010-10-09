@@ -163,6 +163,8 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
         public void run () {}
       };
     }
+    /** Some funny business: ('\0' to '{@literal \}uFFFF'). */
+    public void funnyBiz () {}
   }
   """
 
@@ -176,6 +178,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val ctor = (clazz \ "def").head
     (ctor \ "@doc").text should equal("This makes a foo.<br/>\n" + // TEMP @param hackery
                                       "<b>Param</b>: monkey a monkey for your foo.")
+    // println(pretty(cunit))
   }
 
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)
