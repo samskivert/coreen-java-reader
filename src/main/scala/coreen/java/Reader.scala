@@ -68,7 +68,7 @@ object Reader
       <compunit src={file.toURI.toString}>
       {_scanner.scan(text, ast)}
       </compunit>
-    }) toList;
+    }) toList
   }
 
   private def mkTestObject (file :String, content :String) =
@@ -100,17 +100,19 @@ object Reader
       val oclass = _curclass
       _curclass = node.asInstanceOf[JCClassDecl]
 
+      val isAnon = _curclass.name.toString == ""
+      val clid = _curclass.name + (if (isAnon) "$" + nextanon() else "")
+
+      // name in anon classes is "", but for signature generation we want to replace it with the
+      // name that will be later assigned by the compiler EnclosingClass$N
+      val ocname = _curclass.name
+      _curclass.name = _curclass.name.table.fromString(clid)
       val sig = new StringWriter
       new Pretty(sig, false) {
         override def printBlock (stats :JCList[_ <: JCTree]) { /* noop! */ }
         override def printEnumBody (stats :JCList[JCTree]) { /* noop! */ }
-      }.printExpr(_curclass);
-
-      val isAnon = _curclass.name.toString == ""
-      val clid = if (isAnon) {
-        _anoncount += 1
-        oclass.name + "$" + _anoncount
-      } else _curclass.name.toString
+      }.printExpr(_curclass)
+      _curclass.name = ocname
 
       val cname = if (isAnon) {
         if (_curclass.extending != null) _curclass.extending.toString
@@ -120,7 +122,9 @@ object Reader
       val ocount = _anoncount
       _anoncount = 0
       withId(_curid + "." + clid) {
-        buf += <def name={cname} type="type" id={_curid} sig={sig.toString.trim}
+        // we allow the name to be "" for anonymous classes so that they can be properly filtered
+        // in the user interface; we eventually probably want to be more explicit about this
+        buf += <def name={_curclass.name.toString} type="type" id={_curid} sig={sig.toString.trim}
                     doc={findDoc(_curclass.getStartPosition)}
                     start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
                     bodyStart={_curclass.getStartPosition.toString}
@@ -140,7 +144,7 @@ object Reader
         val sig = new StringWriter
         new Pretty(sig, false) {
           override def printStat (stat :JCTree) { /* noop! */ }
-        }.printExpr(_curmeth);
+        }.printExpr(_curmeth)
 
         val name = if (_curmeth.name.toString == "<init>") _curclass.name else _curmeth.name
         val methid = (if (_curmeth.`type` == null) "" else _curmeth.`type`).toString
@@ -253,9 +257,11 @@ object Reader
       sbuf
     }
 
+    protected def nextanon () = { _anoncount += 1; _anoncount }
+    protected var _anoncount = 0
+
     protected var _curunit :JCCompilationUnit = _
     protected var _curclass :JCClassDecl = _
-    protected var _anoncount = 0
     protected var _curmeth :JCMethodDecl = _
     protected var _symtab :List[MMap[VarSymbol,String]] = Nil
     protected var _curid :String = _
