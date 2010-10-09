@@ -5,6 +5,7 @@ package coreen.java
 
 import java.io.File
 import java.io.StringWriter
+import java.util.regex.{Pattern, Matcher}
 import java.net.{URI, URL}
 
 import javax.lang.model.element.ElementKind
@@ -230,13 +231,31 @@ object Reader
           val commentStart = _text.lastIndexOf("/*", docEnd)
           val docStart = _text.lastIndexOf("/**", docEnd)
           if (docStart != commentStart) ""
-          else trimDoc(_text.substring(docStart+3, docEnd))
+          else processDoc(trimDoc(_text.substring(docStart+3, docEnd)))
         }
       }
     }
+    protected def snipStar (l :String) = if (l.startsWith("*")) l.substring(1).trim else l
     protected def trimDoc (text :String) =
       text.split(_lineSeparator).map(_.trim).map(snipStar).filter(_.length != 0).mkString(" ")
-    protected def snipStar (l :String) = if (l.startsWith("*")) l.substring(1).trim else l
+
+    /** Performs some primitive post-processing of Javadocs. Presently: handles {at code} and
+     * strips at tags (at param etc. will be handled later, and you can look at the full source for
+     * at author, etc.). */
+    protected def processDoc (text :String) = {
+      val m = _codePat.matcher(text)
+      val sb = new StringBuffer
+      while (m.find) {
+        m.appendReplacement(sb, "<code>" + escapeEntities(m.group(1)) + "</code>")
+      }
+      m.appendTail(sb)
+      sb.toString
+    }
+    private val _codePat = Pattern.compile("""\{@code\s(.*)\}""", Pattern.DOTALL)
+
+    protected def escapeEntities (text :String) =
+      text.replaceAll("&","&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").
+           replaceAll("\"", "&quot;").replaceAll("'", "&apos;")
 
     protected def withId (id :String)(block : =>Unit) {
       val oid = _curid

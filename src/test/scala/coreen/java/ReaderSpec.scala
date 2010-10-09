@@ -144,7 +144,27 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val cunit = Reader.process("Foo.java", anonEx)
     val pkg = (cunit \ "def").head
     val clazz = (pkg \ "def").head
-    println(pretty(cunit))
+    // println(pretty(cunit))
+  }
+
+  val docEx = """
+  package test;
+  /** This has some code {@code foo < bar}. */
+  public class Foo {
+    public Foo () {
+      Object foo = new Runnable() {
+        public void run () {}
+      };
+    }
+  }
+  """
+
+  "Reader" should "correctly process Javadoc bits" in {
+    val cunit = Reader.process("Foo.java", docEx)
+    val pkg = (cunit \ "def").head
+    val clazz = (pkg \ "def").head
+    val doc = (clazz \ "@doc").text
+    doc should equal("This has some code <code>foo &lt; bar</code>.")
   }
 
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)
