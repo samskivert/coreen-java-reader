@@ -173,12 +173,60 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val pkg = (cunit \ "def").head
     val clazz = (pkg \ "def").head
     (clazz \ "@doc").text should equal("This has some code <code>foo &lt; bar</code>. " +
-                                       "And some more code <code>bar &gt; foo</code>. " +
+                                       "And some more code <code>bar &gt; foo</code>.\n" +
                                        "And a &lt;literal&gt;.") // @author and @since stripped
     val ctor = (clazz \ "def").head
     (ctor \ "@doc").text should equal("This makes a foo.<br/>\n" + // TEMP @param hackery
                                       "<b>Param</b>: monkey a monkey for your foo.")
     // println(pretty(cunit))
+  }
+
+  val annotationEx = """
+  package test;
+  @Deprecated
+  public class Foo extends Object implements Runnable {
+    public Foo () {
+      Object foo = new Runnable() {
+        public void run () {}
+      };
+    }
+    public void run () {}
+  }
+  """
+
+  "Reader" should "correctly format class signatures" in {
+    val cunit = Reader.process("Foo.java", annotationEx)
+    val pkg = (cunit \ "def").head
+    val clazz = (pkg \ "def").head
+    val sig = (clazz \ "@sig").text
+    // TODO: get extends and implements on separate lines
+    sig should equal("@Deprecated()\n" +
+                     "public class Foo extends Object implements Runnable")
+  }
+
+  val nlInDocEx = """
+  package test;
+  /**
+   * Here's some docs with a newline.
+   * {@code
+   * foo.bar().
+   *    .baz();
+   * }
+   * That's nice.
+   */
+  public class Foo {}
+  """
+
+  "Reader" should "correctly handle newlines in Javadocs" in {
+    val cunit = Reader.process("Foo.java", nlInDocEx)
+    val pkg = (cunit \ "def").head
+    val clazz = (pkg \ "def").head
+    val doc = (clazz \ "@doc").text
+    doc should equal("Here's some docs with a newline.\n" +
+                     "<code>foo.bar().\n" +
+                     "   .baz();\n" +
+                     "</code>\n" +
+                     "That's nice.")
   }
 
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)

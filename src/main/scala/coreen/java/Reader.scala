@@ -206,7 +206,7 @@ object Reader
       }
     }
 
-    protected def targetForSym (name :Name, sym :Symbol) = sym match {
+    private def targetForSym (name :Name, sym :Symbol) = sym match {
       case cs :ClassSymbol => cs.`type`.toString
       case ms :MethodSymbol => ms.owner + "." + ms.name + ms.`type`
       case vs :VarSymbol => vs.getKind match {
@@ -221,7 +221,7 @@ object Reader
       }
     }
 
-    protected def findDoc (pos :Int) = {
+    private def findDoc (pos :Int) = {
       val docEnd = _text.lastIndexOf("*/", pos)
       if (docEnd == -1) ""
       else {
@@ -246,14 +246,16 @@ object Reader
         }
       }
     }
-    protected def snipStar (l :String) = if (l.startsWith("*")) l.substring(1).trim else l
-    protected def trimDoc (text :String) =
-      text.split(_lineSeparator).map(_.trim).map(snipStar).filter(_.length != 0).mkString(" ")
+    private val _starPref = Pattern.compile("""^\* ?""")
+    private def snipStar (l :String) = _starPref.matcher(l).replaceFirst("")
+    private def trimDoc (text :String) =
+      text.split(_lineSeparator).map(_.trim).map(snipStar).filter(
+        _.length != 0).mkString(_lineSeparator)
 
     /** Performs some primitive post-processing of Javadocs. Presently: handles {at code} and
      * strips at tags (at param etc. will be handled later, and you can look at the full source for
      * at author, etc.). */
-    protected def processDoc (text :String) = {
+    private def processDoc (text :String) = {
       // first expand brace tag patterns
       val btm = _braceTagPat.matcher(text)
       val sb = new StringBuffer
@@ -309,38 +311,38 @@ object Reader
       """@(author|deprecated|exception|param|return|see|serial|serialData|serialField|""" +
       """since|throws|version)""")
 
-    protected def escapeEntities (text :String) =
+    private def escapeEntities (text :String) =
       text.replaceAll("&","&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").
            replaceAll("\"", "&quot;").replaceAll("'", "&apos;")
 
-    protected def withId (id :String)(block : =>Unit) {
+    private def withId (id :String)(block : =>Unit) {
       val oid = _curid
       _curid = id
       block
       _curid = oid
     }
 
-    protected def withScope (block : => Unit) {
+    private def withScope (block : => Unit) {
       _symtab = MMap[VarSymbol,String]() :: _symtab
       block
       _symtab = _symtab.tail
     }
 
-    protected def capture (call :ArrayBuffer[Elem] => Unit) = {
+    private def capture (call :ArrayBuffer[Elem] => Unit) = {
       val sbuf = ArrayBuffer[Elem]()
       call(sbuf)
       sbuf
     }
 
-    protected def nextanon () = { _anoncount += 1; _anoncount }
-    protected var _anoncount = 0
+    private def nextanon () = { _anoncount += 1; _anoncount }
+    private var _anoncount = 0
 
-    protected var _curunit :JCCompilationUnit = _
-    protected var _curclass :JCClassDecl = _
-    protected var _curmeth :JCMethodDecl = _
-    protected var _symtab :List[MMap[VarSymbol,String]] = Nil
-    protected var _curid :String = _
-    protected var _text :String = _
+    private var _curunit :JCCompilationUnit = _
+    private var _curclass :JCClassDecl = _
+    private var _curmeth :JCMethodDecl = _
+    private var _symtab :List[MMap[VarSymbol,String]] = Nil
+    private var _curid :String = _
+    private var _text :String = _
   }
 
   private val _scanner = new Scanner
