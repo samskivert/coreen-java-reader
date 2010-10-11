@@ -290,12 +290,12 @@ object Reader
 
         val sep = "<br/>\n"
         val tagText = tags.map(_ match { case (tag, text) => tag match {
-          case "@deprecated" => Some("<b>Deprecated</b>: " + text)
+          case "@deprecated" => Some("<em>Deprecated</em>: " + text)
           case "@exception"
-             | "@throws"     => Some("<b>Throws</b>: " + text) // TODO: magic
-          case "@param"      => Some("<b>Param</b>: " + text) // TODO: magic
-          case "@return"     => Some("<b>Returns</b>: " + text)
-          case "@see"        => Some("<b>See</b>: <code>" + text + "</code>") // TODO: magic
+             | "@throws"     => Some("<em>Throws</em>: " + text) // TODO: magic
+          case "@param"      => Some("<em>Param</em>: " + text) // TODO: magic
+          case "@return"     => Some("<em>Returns</em>: " + text)
+          case "@see"        => Some("<em>See</em>: <code>" + text + "</code>") // TODO: magic
           case "@author" | "@serial" | "@serialData" | "@serialField" | "@since"
              | "@version" => None
         }}).flatten.mkString(sep)
