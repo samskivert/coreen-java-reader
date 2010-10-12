@@ -177,7 +177,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
                                        "And a &lt;literal&gt;.") // @author and @since stripped
     val ctor = (clazz \ "def").head
     (ctor \ "@doc").text should equal("This makes a foo.<br/>\n" + // TEMP @param hackery
-                                      "<b>Param</b>: monkey a monkey for your foo.")
+                                      "<em>Param</em>: monkey a monkey for your foo.")
     // println(pretty(cunit))
   }
 
@@ -227,6 +227,24 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
                      "   .baz();\n" +
                      "</code>\n" +
                      "That's nice.")
+  }
+
+  val paramTypeEx = """
+  package test;
+  public class Foo {
+    public interface A<T> {}
+    public class B {}
+    public void foo (A<B> test) {}
+  }
+  """
+
+  "Reader" should "correctly handle parameterized uses" in {
+    val cunit = Reader.process("Foo.java", paramTypeEx)
+    val pkg = (cunit \ "def").head
+    val uses = pkg \\ "use"
+    uses.length should equal(2)
+    (uses(0) \ "@target").text should equal("test.Foo.A")
+    (uses(1) \ "@target").text should equal("test.Foo.B")
   }
 
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)

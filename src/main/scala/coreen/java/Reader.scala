@@ -15,11 +15,11 @@ import javax.tools.ToolProvider
 
 import com.sun.source.tree._
 import com.sun.source.util.{JavacTask, TreePathScanner}
-import com.sun.tools.javac.code.{Flags, Symbol}
+import com.sun.tools.javac.code.{Flags, Symbol, Types}
 import com.sun.tools.javac.code.Symbol._
 import com.sun.tools.javac.tree.JCTree._
 import com.sun.tools.javac.tree.{JCTree, Pretty}
-import com.sun.tools.javac.util.{List => JCList, Name}
+import com.sun.tools.javac.util.{List => JCList, Name, Context}
 
 import scala.collection.mutable.{ArrayBuffer, Map => MMap}
 import scala.xml.{Elem, NodeSeq}
@@ -55,6 +55,12 @@ object Reader
       null, null, null, options.asJava, null, files.asJava).asInstanceOf[JavacTask]
     val asts = task.parse.asScala
     task.analyze
+
+    // reach in and get the Context that we can use to get access to compiler services
+    val cf = task.getClass.getDeclaredField("context")
+    cf.setAccessible(true)
+    _context = cf.get(task).asInstanceOf[Context]
+    _types = Types.instance(_context)
 
     // annoyingly, there's no (public) way to tell the task that we're done without generating
     // .class files, so instead we have to do this reach around
@@ -207,7 +213,7 @@ object Reader
     }
 
     private def targetForSym (name :Name, sym :Symbol) = sym match {
-      case cs :ClassSymbol => cs.`type`.toString
+      case cs :ClassSymbol => _types.erasure(cs.`type`).toString
       case ms :MethodSymbol => ms.owner + "." + ms.name + ms.`type`
       case vs :VarSymbol => vs.getKind match {
         case ElementKind.FIELD => vs.owner + "." + name
@@ -348,4 +354,8 @@ object Reader
   private val _scanner = new Scanner
   private val _compiler = com.sun.tools.javac.api.JavacTool.create
   private val _lineSeparator = System.getProperty("line.separator")
+
+  // these are initialized on each invocation of a compiler task
+  private var _context :Context = _
+  private var _types :Types = _
 }
