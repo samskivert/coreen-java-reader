@@ -35,7 +35,7 @@ object Reader
    * Processes a list of source files.
    * @return a list of {@code <compunit>} elements containing their defs and uses.
    */
-  def process (files :Seq[File], classpath :Seq[File]) :List[Elem] = {
+  def process (files :Seq[File], classpath :Seq[File]) :Iterable[Elem] = {
     val fm = _compiler.getStandardFileManager(null, null, null) // TODO: args?
     process0(fm.getJavaFileObjects(files.toArray :_*).asScala.toList, classpath)
   }
@@ -47,7 +47,7 @@ object Reader
   def process (filename :String, content :String) :Elem =
     process0(List(mkTestObject(filename, content)), List()) head
 
-  private def process0 (files :List[JavaFileObject], classpath :Seq[File]) :List[Elem] = {
+  private def process0 (files :List[JavaFileObject], classpath :Seq[File]) :Iterable[Elem] = {
     val cpopt = if (classpath.length == 0) Nil
                 else List("-classpath", classpath.mkString(File.pathSeparator))
     val options = List("-Xjcov") ++ cpopt
@@ -68,14 +68,14 @@ object Reader
     endContext.setAccessible(true)
     endContext.invoke(task)
 
-    asts map(ast => {
+    asts.view map(ast => {
       val text = ast.asInstanceOf[JCCompilationUnit].sourcefile.getCharContent(true).toString
       // TODO: someday we should be able to remove .getPath (or maybe even use toUri.toString)
       val file = new File(ast.asInstanceOf[JCCompilationUnit].sourcefile.toUri.getPath)
       <compunit src={file.toURI.toString}>
       {_scanner.scan(text, ast)}
       </compunit>
-    }) toList
+    })
   }
 
   private def mkTestObject (file :String, content :String) =
