@@ -247,5 +247,47 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     (uses(1) \ "@target").text should equal("test.Foo.B")
   }
 
+  val flavorEx = """
+  package test;
+  public class Foo {
+    public interface A {
+      void interfaceMethod ();
+    }
+    public enum B {}
+    public @interface C {
+    }
+    public abstract class D {
+      public abstract void abstractMethod ();
+    }
+    public int field;
+    public Foo () {
+      // ctor
+    }
+    public void method (A param) {
+      B local = null;
+    }
+  }
+  """
+
+  "Reader" should "correctly assign flavors" in {
+    val cunit = Reader.process("Foo.java", flavorEx)
+    val pkg = (cunit \ "def").head
+    // println(pretty(cunit))
+    val flavs = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@flavor").text)) toMap;
+    // println(flavs)
+    flavs("test.Foo") should equal("class")
+    flavs("test.Foo.A") should equal("interface")
+    flavs("test.Foo.A.interfaceMethod()void") should equal("abstract_method")
+    flavs("test.Foo.B") should equal("enum")
+    flavs("test.Foo.C") should equal("annotation")
+    flavs("test.Foo.D") should equal("abstract_class")
+    flavs("test.Foo.D.abstractMethod()void") should equal("abstract_method")
+    flavs("test.Foo.field") should equal("field")
+    flavs("test.Foo.Foo()void") should equal("constructor")
+    flavs("test.Foo.method(test.Foo.A)void") should equal("method")
+    flavs("test.Foo.method(test.Foo.A)void.param") should equal("param")
+    flavs("test.Foo.method(test.Foo.A)void.local") should equal("local")
+  }
+
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)
 }

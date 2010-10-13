@@ -126,13 +126,19 @@ object Reader
         else _curclass.implementing.toString
       } else clid
 
+      val flavor = if ((_curclass.mods.flags & Flags.ANNOTATION) != 0) "annotation"
+                   else if ((_curclass.mods.flags & Flags.ENUM) != 0) "enum"
+                   else if ((_curclass.mods.flags & Flags.INTERFACE) != 0) "interface"
+                   else if ((_curclass.mods.flags & Flags.ABSTRACT) != 0) "abstract_class"
+                   else "class"
+
       val ocount = _anoncount
       _anoncount = 0
       withId(_curid + "." + clid) {
         // we allow the name to be "" for anonymous classes so that they can be properly filtered
         // in the user interface; we eventually probably want to be more explicit about this
-        buf += <def name={_curclass.name.toString} type="type" id={_curid} sig={sig.toString.trim}
-                    doc={findDoc(_curclass.getStartPosition)}
+        buf += <def name={_curclass.name.toString} id={_curid} type="type" flavor={flavor}
+                    sig={sig.toString.trim} doc={findDoc(_curclass.getStartPosition)}
                     start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
                     bodyStart={_curclass.getStartPosition.toString}
                     bodyEnd={_curclass.getEndPosition(_curunit.endPositions).toString}
@@ -153,11 +159,18 @@ object Reader
           override def printStat (stat :JCTree) { /* noop! */ }
         }.printExpr(_curmeth)
 
-        val name = if (_curmeth.name.toString == "<init>") _curclass.name else _curmeth.name
+        val isCtor = (_curmeth.name.toString == "<init>")
+        val flavor = if (isCtor) "constructor"
+                     else if ((_curclass.mods.flags & Flags.INTERFACE) != 0 ||
+                              (_curmeth.mods.flags & Flags.ABSTRACT) != 0) "abstract_method"
+                     else if ((_curmeth.mods.flags & Flags.STATIC) != 0) "static_method"
+                     else "method"
+
+        val name = if (isCtor) _curclass.name else _curmeth.name
         val methid = (if (_curmeth.`type` == null) "" else _curmeth.`type`).toString
         withId(_curid + "." + name + methid) {
-          buf += <def name={name.toString} type="func" id={_curid} sig={sig.toString.trim}
-                      doc={findDoc(_curmeth.getStartPosition)}
+          buf += <def name={name.toString} id={_curid} type="func" flavor={flavor}
+                      sig={sig.toString.trim} doc={findDoc(_curmeth.getStartPosition)}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
                       bodyStart={_curmeth.getStartPosition.toString}
                       bodyEnd={_curmeth.getEndPosition(_curunit.endPositions).toString}
@@ -176,12 +189,17 @@ object Reader
       val oinit = tree.init
       val sig = try { tree.init = null ; tree.toString } finally { tree.init = oinit }
 
+      val flavor = if (_curmeth == null) "field"
+                   else if ((tree.mods.flags & Flags.PARAMETER) != 0) "param"
+                   else "local"
+
       val doc = if (_curmeth == null) findDoc(tree.getStartPosition) else ""
       withId(_curid + "." + tree.name.toString) {
         // add a symtab mapping for this vardef
         if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
         val varend = tree.vartype.getEndPosition(_curunit.endPositions)
-        buf += <def name={tree.name.toString} type="term" id={_curid} sig={sig} doc={doc}
+        buf += <def name={tree.name.toString} id={_curid} type="term" flavor={flavor}
+                    sig={sig} doc={doc}
                     start={_text.indexOf(tree.name.toString, varend).toString}
                     bodyStart={tree.getStartPosition.toString}
                     bodyEnd={tree.getEndPosition(_curunit.endPositions).toString}
