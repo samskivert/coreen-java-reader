@@ -289,5 +289,34 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     flavs("test.Foo.method(test.Foo.A)void.local") should equal("local")
   }
 
+  val accessEx = """
+  package test;
+  public class Foo {
+    interface A {
+      void interfaceMethod ();
+    }
+    protected class B {
+      protected void method () {}
+    }
+    private int field;
+    void method () {}
+  }
+  """
+
+  "Reader" should "correctly assign access" in {
+    val cunit = Reader.process("Foo.java", accessEx)
+    val pkg = (cunit \ "def").head
+    // println(pretty(cunit))
+    val accs = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@access").text)) toMap;
+    // println(accs)
+    accs("test.Foo") should equal("public")
+    accs("test.Foo.A") should equal("default")
+    accs("test.Foo.A.interfaceMethod()void") should equal("public")
+    accs("test.Foo.B") should equal("protected")
+    accs("test.Foo.B.method()void") should equal("protected")
+    accs("test.Foo.field") should equal("private")
+    accs("test.Foo.method()void") should equal("default")
+  }
+
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)
 }

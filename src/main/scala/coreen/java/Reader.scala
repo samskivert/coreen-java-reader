@@ -96,7 +96,7 @@ object Reader
       _curunit = node.asInstanceOf[JCCompilationUnit]
       withId(_curunit.packge.toString) {
         buf += <def name={_curunit.packge.toString} id={_curid} type="module" flavor="none"
-                    sig={_curunit.packge.toString}
+                    access={"public"} sig={_curunit.packge.toString}
                     start={_text.indexOf(_curunit.packge.toString, _curunit.pos).toString}
                >{capture(super.visitCompilationUnit(node, _))}</def>
       }
@@ -126,10 +126,10 @@ object Reader
         else _curclass.implementing.toString
       } else clid
 
-      val flavor = if ((_curclass.mods.flags & Flags.ANNOTATION) != 0) "annotation"
-                   else if ((_curclass.mods.flags & Flags.ENUM) != 0) "enum"
-                   else if ((_curclass.mods.flags & Flags.INTERFACE) != 0) "interface"
-                   else if ((_curclass.mods.flags & Flags.ABSTRACT) != 0) "abstract_class"
+      val flavor = if (hasFlag(_curclass.mods, Flags.ANNOTATION)) "annotation"
+                   else if (hasFlag(_curclass.mods, Flags.ENUM)) "enum"
+                   else if (hasFlag(_curclass.mods, Flags.INTERFACE)) "interface"
+                   else if (hasFlag(_curclass.mods, Flags.ABSTRACT)) "abstract_class"
                    else "class"
 
       val ocount = _anoncount
@@ -138,6 +138,7 @@ object Reader
         // we allow the name to be "" for anonymous classes so that they can be properly filtered
         // in the user interface; we eventually probably want to be more explicit about this
         buf += <def name={_curclass.name.toString} id={_curid} type="type" flavor={flavor}
+                    access={flagsToAccess(_curclass.mods.flags)}
                     sig={sig.toString.trim} doc={findDoc(_curclass.getStartPosition)}
                     start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
                     bodyStart={_curclass.getStartPosition.toString}
@@ -153,7 +154,7 @@ object Reader
       _curmeth = node.asInstanceOf[JCMethodDecl]
 
       // don't emit a def for synthesized ctors
-      if ((_curmeth.mods.flags & Flags.GENERATEDCONSTR) == 0) {
+      if (!hasFlag(_curmeth.mods, Flags.GENERATEDCONSTR)) {
         val sig = new StringWriter
         new Pretty(sig, false) {
           override def printStat (stat :JCTree) { /* noop! */ }
@@ -161,15 +162,19 @@ object Reader
 
         val isCtor = (_curmeth.name.toString == "<init>")
         val flavor = if (isCtor) "constructor"
-                     else if ((_curclass.mods.flags & Flags.INTERFACE) != 0 ||
-                              (_curmeth.mods.flags & Flags.ABSTRACT) != 0) "abstract_method"
-                     else if ((_curmeth.mods.flags & Flags.STATIC) != 0) "static_method"
+                     else if (hasFlag(_curclass.mods, Flags.INTERFACE) ||
+                              hasFlag(_curmeth.mods, Flags.ABSTRACT)) "abstract_method"
+                     else if (hasFlag(_curmeth.mods, Flags.STATIC)) "static_method"
                      else "method"
+
+        // interface methods are specially defined to always be public
+        val access = if (hasFlag(_curclass.mods.flags, Flags.INTERFACE)) "public"
+                     else flagsToAccess(_curmeth.mods.flags)
 
         val name = if (isCtor) _curclass.name else _curmeth.name
         val methid = (if (_curmeth.`type` == null) "" else _curmeth.`type`).toString
         withId(_curid + "." + name + methid) {
-          buf += <def name={name.toString} id={_curid} type="func" flavor={flavor}
+          buf += <def name={name.toString} id={_curid} type="func" flavor={flavor} access={access}
                       sig={sig.toString.trim} doc={findDoc(_curmeth.getStartPosition)}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
                       bodyStart={_curmeth.getStartPosition.toString}
@@ -190,10 +195,14 @@ object Reader
       val sig = try { tree.init = null ; tree.toString } finally { tree.init = oinit }
 
       val flavor = if (_curmeth == null) {
-                     if ((tree.mods.flags & Flags.STATIC) != 0) "static_field"
+                     if (hasFlag(tree.mods, Flags.STATIC)) "static_field"
                      else "field"
-                   } else if ((tree.mods.flags & Flags.PARAMETER) != 0) "param"
+                   } else if (hasFlag(tree.mods, Flags.PARAMETER)) "param"
                    else "local"
+      val access = flavor match {
+        case "static_field" | "field" => flagsToAccess(tree.mods.flags)
+        case _ => "default"
+      }
 
       val doc = if (_curmeth == null) findDoc(tree.getStartPosition) else ""
       withId(_curid + "." + tree.name.toString) {
@@ -201,11 +210,11 @@ object Reader
         if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
         val varend = tree.vartype.getEndPosition(_curunit.endPositions)
         buf += <def name={tree.name.toString} id={_curid} type="term" flavor={flavor}
-                    sig={sig} doc={doc}
+                    access={access} sig={sig} doc={doc}
                     start={_text.indexOf(tree.name.toString, varend).toString}
                     bodyStart={tree.getStartPosition.toString}
                     bodyEnd={tree.getEndPosition(_curunit.endPositions).toString}
-               >{ if ((tree.mods.flags & Flags.ENUM) != 0) NodeSeq.Empty
+               >{ if (hasFlag(tree.mods, Flags.ENUM)) NodeSeq.Empty
                   else capture(super.visitVariable(node, _)) }</def>
       }
     }
@@ -336,6 +345,15 @@ object Reader
     private val _tagPat = Pattern.compile(
       """@(author|deprecated|exception|param|return|see|serial|serialData|serialField|""" +
       """since|throws|version)""")
+
+    private def hasFlag (mods :JCModifiers, flag :Long) :Boolean = (mods.flags & flag) != 0
+    private def hasFlag (flags :Long, flag :Long) :Boolean = (flags & flag) != 0
+
+    private def flagsToAccess (flags :Long) =
+      if (hasFlag(flags, Flags.PUBLIC)) "public"
+      else if (hasFlag(flags, Flags.PROTECTED)) "protected"
+      else if (hasFlag(flags, Flags.PRIVATE)) "private"
+      else "default"
 
     private def escapeEntities (text :String) =
       text.replaceAll("&","&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").
