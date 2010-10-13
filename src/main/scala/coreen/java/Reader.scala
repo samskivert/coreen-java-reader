@@ -95,7 +95,7 @@ object Reader
       val oldunit = _curunit
       _curunit = node.asInstanceOf[JCCompilationUnit]
       withId(_curunit.packge.toString) {
-        buf += <def name={_curunit.packge.toString} type="module" id={_curid}
+        buf += <def name={_curunit.packge.toString} id={_curid} type="module" flavor="none"
                     sig={_curunit.packge.toString}
                     start={_text.indexOf(_curunit.packge.toString, _curunit.pos).toString}
                >{capture(super.visitCompilationUnit(node, _))}</def>
@@ -189,8 +189,10 @@ object Reader
       val oinit = tree.init
       val sig = try { tree.init = null ; tree.toString } finally { tree.init = oinit }
 
-      val flavor = if (_curmeth == null) "field"
-                   else if ((tree.mods.flags & Flags.PARAMETER) != 0) "param"
+      val flavor = if (_curmeth == null) {
+                     if ((tree.mods.flags & Flags.STATIC) != 0) "static_field"
+                     else "field"
+                   } else if ((tree.mods.flags & Flags.PARAMETER) != 0) "param"
                    else "local"
 
       val doc = if (_curmeth == null) findDoc(tree.getStartPosition) else ""
