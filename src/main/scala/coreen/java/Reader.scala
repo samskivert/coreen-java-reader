@@ -15,7 +15,7 @@ import javax.tools.ToolProvider
 
 import com.sun.source.tree._
 import com.sun.source.util.{JavacTask, TreePathScanner}
-import com.sun.tools.javac.code.{Flags, Symbol, Types}
+import com.sun.tools.javac.code.{Flags, Symbol, Types, TypeTags}
 import com.sun.tools.javac.code.Symbol._
 import com.sun.tools.javac.tree.JCTree._
 import com.sun.tools.javac.tree.{JCTree, Pretty}
@@ -132,13 +132,16 @@ object Reader
                    else if (hasFlag(_curclass.mods, Flags.ABSTRACT)) "abstract_class"
                    else "class"
 
+      val supers = Option(_curclass.`type`).toList flatMap(
+        t => _types.interfaces(t).prepend(_types.supertype(t)).asScala) mkString(" ")
+
       val ocount = _anoncount
       _anoncount = 0
       withId(_curid + "." + clid) {
         // we allow the name to be "" for anonymous classes so that they can be properly filtered
         // in the user interface; we eventually probably want to be more explicit about this
         buf += <def name={_curclass.name.toString} id={_curid} type="type" flavor={flavor}
-                    access={flagsToAccess(_curclass.mods.flags)}
+                    access={flagsToAccess(_curclass.mods.flags)} supers={supers}
                     sig={sig.toString.trim} doc={findDoc(_curclass.getStartPosition)}
                     start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
                     bodyStart={_curclass.getStartPosition.toString}
@@ -171,10 +174,14 @@ object Reader
         val access = if (hasFlag(_curclass.mods.flags, Flags.INTERFACE)) "public"
                      else flagsToAccess(_curmeth.mods.flags)
 
+        val supers = Option(_curmeth.sym) flatMap(findSuperMethod) map(
+          s => targetForSym(_curmeth.name, s)) getOrElse("")
+
         val name = if (isCtor) _curclass.name else _curmeth.name
         val methid = (if (_curmeth.`type` == null) "" else _curmeth.`type`).toString
         withId(_curid + "." + name + methid) {
-          buf += <def name={name.toString} id={_curid} type="func" flavor={flavor} access={access}
+          buf += <def name={name.toString} id={_curid} type="func"
+                      flavor={flavor} access={access} supers={supers}
                       sig={sig.toString.trim} doc={findDoc(_curmeth.getStartPosition)}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
                       bodyStart={_curmeth.getStartPosition.toString}
@@ -254,6 +261,22 @@ object Reader
         // println("TODOOZ " + name + " " + sym.getClass)
         sym.toString // TODO
       }
+    }
+
+    // TODO: strictly speaking this should find all interface methods but it currently stops at the
+    // first
+    private def findSuperMethod (m :MethodSymbol) :Option[MethodSymbol] = {
+      val owner = m.owner.asInstanceOf[TypeSymbol]
+      for (sup <- _types.closure(owner.`type`).asScala; if (sup != owner.`type`)) {
+        val scope = sup.tsym.members
+        var e = scope.lookup(m.name)
+        while (e.scope != null) {
+          if (!e.sym.isStatic && m.overrides(e.sym, owner, _types, true))
+            return Some(e.sym.asInstanceOf[MethodSymbol])
+          e = e.next
+        }
+      }
+      None
     }
 
     private def findDoc (pos :Int) = {

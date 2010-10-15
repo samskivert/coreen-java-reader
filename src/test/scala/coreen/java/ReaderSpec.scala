@@ -318,5 +318,43 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     accs("test.Foo.method()void") should equal("default")
   }
 
+  val superEx = """
+  package test;
+  public class Foo {
+    interface A extends Runnable {
+      void interfaceMethod ();
+    }
+  }
+  """
+
+  "Reader" should "correctly compute super types" in {
+    val cunit = Reader.process("Foo.java", superEx)
+    val pkg = (cunit \ "def").head
+    // println(pretty(cunit))
+    val supers = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@supers").text)) toMap;
+    // println(supers)
+    supers("test.Foo") should equal("java.lang.Object")
+    supers("test.Foo.A") should equal("java.lang.Object java.lang.Runnable")
+  }
+
+  val superMethodEx = """
+  package test;
+  public class Foo implements Runnable {
+    @Override public void run () {}
+    @Override public String toString() { return "Foo"; }
+  }
+  """
+
+  "Reader" should "correctly compute method super types" in {
+    val cunit = Reader.process("Foo.java", superMethodEx)
+    val pkg = (cunit \ "def").head
+    // println(pretty(cunit))
+    val supers = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@supers").text)) toMap;
+    // println(supers)
+    supers("test.Foo.run()void") should equal("java.lang.Runnable.run()void")
+    supers("test.Foo.toString()java.lang.String") should equal(
+      "java.lang.Object.toString()java.lang.String")
+  }
+
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)
 }
