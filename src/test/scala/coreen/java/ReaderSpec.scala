@@ -356,5 +356,22 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
       "java.lang.Object.toString()java.lang.String")
   }
 
+  val paramSuperEx = """
+  package test;
+  public class Foo {
+    interface A extends Comparable<A> {
+      void interfaceMethod ();
+    }
+  }
+  """
+
+  "Reader" should "correctly handle parameterized super types" in {
+    val cunit = Reader.process("Foo.java", paramSuperEx)
+    val pkg = (cunit \ "def").head
+    val supers = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@supers").text)) toMap;
+    supers("test.Foo") should equal("java.lang.Object")
+    supers("test.Foo.A") should equal("java.lang.Object java.lang.Comparable")
+  }
+
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)
 }

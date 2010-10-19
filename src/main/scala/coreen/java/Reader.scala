@@ -133,7 +133,8 @@ object Reader
                    else "class"
 
       val supers = Option(_curclass.`type`).toList flatMap(
-        t => _types.interfaces(t).prepend(_types.supertype(t)).asScala) mkString(" ")
+        t => _types.interfaces(t).prepend(_types.supertype(t)).asScala) map(
+          _types.erasure(_)) mkString(" ")
 
       val ocount = _anoncount
       _anoncount = 0
