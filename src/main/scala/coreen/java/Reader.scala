@@ -348,13 +348,17 @@ object Reader
         tags += Pair(etext.substring(tstart, tend), etext.substring(tend).trim)
 
         val ttlist = tags.map(_ match { case (tag, text) => tag match {
+          case "@exception" | "@throws" => firstRest(text) match {
+            case (e, "") => Some("<dt>throws " + e + "</dt><dd>(no docs)</dd>") // TODO: magic
+            case (e, d) =>  Some("<dt>throws " + e + "</dt><dd>" + d + "</dd>") // TODO: magic
+          }
+          case "@param" => firstRest(text) match {
+            case (p, "") => Some("<dt>" + p + "</dt><dd>(no docs)</dd>")
+            case (p, d) => Some("<dt>" + p + "</dt><dd>" + d + "</dd>") // TODO: magic
+          }
           case "@deprecated" => Some("<dt>Deprecated</dt><dd>" + text + "</dd>")
-          case "@exception"
-             | "@throws"     => Some("<dt>Throws</dt><dd>" + text + "</dd>") // TODO: magic
-          case "@param"      => Some("<dt>Param</dt><dd>" + text + "</dd>") // TODO: magic
-          case "@return"     => Some("<dt>Returns</dt><dd>" + text + "</dd>")
-          case "@see"        => Some("<dt>See</dt>" +
-                                     "<dd><code>" + text + "</code></dd>") // TODO: magic
+          case "@return" => Some("<dt>Returns</dt><dd>" + text + "</dd>")
+          case "@see" => Some("<dt>See</dt><dd><code>" + text + "</code></dd>") // TODO: magic
           case "@author" | "@serial" | "@serialData" | "@serialField" | "@since"
              | "@version" => None
         }})
@@ -372,6 +376,12 @@ object Reader
     private val _tagPat = Pattern.compile(
       """@(author|deprecated|exception|param|return|see|serial|serialData|serialField|""" +
       """since|throws|version)""")
+
+    private def firstRest (text :String) = {
+      val didx = text.indexOf(" ")
+      if (didx == -1) (text, "")
+      else (text.substring(0, didx), text.substring(didx+1))
+    }
 
     private def hasFlag (mods :JCModifiers, flag :Long) :Boolean = (mods.flags & flag) != 0
     private def hasFlag (flags :Long, flag :Long) :Boolean = (flags & flag) != 0
