@@ -347,19 +347,22 @@ object Reader
         }
         tags += Pair(etext.substring(tstart, tend), etext.substring(tend).trim)
 
-        val sep = "<br/>\n"
-        val tagText = tags.map(_ match { case (tag, text) => tag match {
-          case "@deprecated" => Some("<em>Deprecated</em>: " + text)
+        val ttlist = tags.map(_ match { case (tag, text) => tag match {
+          case "@deprecated" => Some("<dt>Deprecated</dt><dd>" + text + "</dd>")
           case "@exception"
-             | "@throws"     => Some("<em>Throws</em>: " + text) // TODO: magic
-          case "@param"      => Some("<em>Param</em>: " + text) // TODO: magic
-          case "@return"     => Some("<em>Returns</em>: " + text)
-          case "@see"        => Some("<em>See</em>: <code>" + text + "</code>") // TODO: magic
+             | "@throws"     => Some("<dt>Throws</dt><dd>" + text + "</dd>") // TODO: magic
+          case "@param"      => Some("<dt>Param</dt><dd>" + text + "</dd>") // TODO: magic
+          case "@return"     => Some("<dt>Returns</dt><dd>" + text + "</dd>")
+          case "@see"        => Some("<dt>See</dt>" +
+                                     "<dd><code>" + text + "</code></dd>") // TODO: magic
           case "@author" | "@serial" | "@serialData" | "@serialField" | "@since"
              | "@version" => None
-        }}).flatten.mkString(sep)
+        }})
 
-        preText + (if (!preText.isEmpty && !tagText.isEmpty) sep else "") + tagText
+        preText + (ttlist.flatten.mkString("\n") match {
+          case "" => ""
+          case text => "<dl>\n" + text + "</dl>"
+        })
       }
     }
 

@@ -176,8 +176,8 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
                                        "And some more code <code>bar &gt; foo</code>.\n" +
                                        "And a &lt;literal&gt;.") // @author and @since stripped
     val ctor = (clazz \ "def").head
-    (ctor \ "@doc").text should equal("This makes a foo.<br/>\n" + // TEMP @param hackery
-                                      "<em>Param</em>: monkey a monkey for your foo.")
+    (ctor \ "@doc").text should equal("This makes a foo.<dl>\n" + // TEMP @param hackery
+                                      "<dt>Param</dt><dd>monkey a monkey for your foo.</dd></dl>")
     // println(pretty(cunit))
   }
 
