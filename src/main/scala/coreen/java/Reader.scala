@@ -95,7 +95,7 @@ object Reader
       val oldunit = _curunit
       _curunit = node.asInstanceOf[JCCompilationUnit]
       withId(_curunit.packge.toString) {
-        buf += <def name={_curunit.packge.toString} id={_curid} type="module" flavor="none"
+        buf += <def name={_curunit.packge.toString} id={_curid} type="module" kind="none"
                     access={"public"} sig={_curunit.packge.toString}
                     start={_text.indexOf(_curunit.packge.toString, _curunit.pos).toString}
                >{capture(super.visitCompilationUnit(node, _))}</def>
@@ -126,11 +126,11 @@ object Reader
         else _curclass.implementing.toString
       } else clid
 
-      val flavor = if (hasFlag(_curclass.mods, Flags.ANNOTATION)) "annotation"
-                   else if (hasFlag(_curclass.mods, Flags.ENUM)) "enum"
-                   else if (hasFlag(_curclass.mods, Flags.INTERFACE)) "interface"
-                   else if (hasFlag(_curclass.mods, Flags.ABSTRACT)) "abstract_class"
-                   else "class"
+      val kind = if (hasFlag(_curclass.mods, Flags.ANNOTATION)) "annotation"
+                 else if (hasFlag(_curclass.mods, Flags.ENUM)) "enum"
+                 else if (hasFlag(_curclass.mods, Flags.INTERFACE)) "interface"
+                 else if (hasFlag(_curclass.mods, Flags.ABSTRACT)) "abstract_class"
+                 else "class"
 
       def getSupers (t :Type) =
         if (t == null) Nil
@@ -143,7 +143,7 @@ object Reader
       withId(_curid + "." + clid) {
         // we allow the name to be "" for anonymous classes so that they can be properly filtered
         // in the user interface; we eventually probably want to be more explicit about this
-        buf += <def name={_curclass.name.toString} id={_curid} type="type" flavor={flavor}
+        buf += <def name={_curclass.name.toString} id={_curid} type="type" kind={kind}
                     access={flagsToAccess(_curclass.mods.flags)} supers={supers}
                     sig={sig.toString.trim} doc={findDoc(_curclass.getStartPosition)}
                     start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
@@ -167,11 +167,11 @@ object Reader
         }.printExpr(_curmeth)
 
         val isCtor = (_curmeth.name.toString == "<init>")
-        val flavor = if (isCtor) "constructor"
-                     else if (hasFlag(_curclass.mods, Flags.INTERFACE) ||
-                              hasFlag(_curmeth.mods, Flags.ABSTRACT)) "abstract_method"
-                     else if (hasFlag(_curmeth.mods, Flags.STATIC)) "static_method"
-                     else "method"
+        val kind = if (isCtor) "constructor"
+                   else if (hasFlag(_curclass.mods, Flags.INTERFACE) ||
+                            hasFlag(_curmeth.mods, Flags.ABSTRACT)) "abstract_method"
+                   else if (hasFlag(_curmeth.mods, Flags.STATIC)) "static_method"
+                   else "method"
 
         // interface methods are specially defined to always be public
         val access = if (hasFlag(_curclass.mods.flags, Flags.INTERFACE)) "public"
@@ -184,7 +184,7 @@ object Reader
         val methid = (if (_curmeth.`type` == null) "" else _curmeth.`type`).toString
         withId(_curid + "." + name + methid) {
           buf += <def name={name.toString} id={_curid} type="func"
-                      flavor={flavor} access={access} supers={supers}
+                      kind={kind} access={access} supers={supers}
                       sig={sig.toString.trim} doc={findDoc(_curmeth.getStartPosition)}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
                       bodyStart={_curmeth.getStartPosition.toString}
@@ -204,12 +204,12 @@ object Reader
       val oinit = tree.init
       val sig = try { tree.init = null ; tree.toString } finally { tree.init = oinit }
 
-      val flavor = if (_curmeth == null) {
-                     if (hasFlag(tree.mods, Flags.STATIC)) "static_field"
-                     else "field"
-                   } else if (hasFlag(tree.mods, Flags.PARAMETER)) "param"
+      val kind = if (_curmeth == null) {
+                   if (hasFlag(tree.mods, Flags.STATIC)) "static_field"
+                   else "field"
+                 } else if (hasFlag(tree.mods, Flags.PARAMETER)) "param"
                    else "local"
-      val access = flavor match {
+      val access = kind match {
         case "static_field" | "field" => flagsToAccess(tree.mods.flags)
         case _ => "default"
       }
@@ -219,7 +219,7 @@ object Reader
         // add a symtab mapping for this vardef
         if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
         val varend = tree.vartype.getEndPosition(_curunit.endPositions)
-        buf += <def name={tree.name.toString} id={_curid} type="term" flavor={flavor}
+        buf += <def name={tree.name.toString} id={_curid} type="term" kind={kind}
                     access={access} sig={sig} doc={doc}
                     start={_text.indexOf(tree.name.toString, varend).toString}
                     bodyStart={tree.getStartPosition.toString}
