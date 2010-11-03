@@ -4,6 +4,7 @@
 package coreen.java
 
 import java.io.File
+import java.lang.System.out
 import scala.xml.PrettyPrinter
 
 /**
@@ -33,10 +34,10 @@ object Main
     val pp = new PrettyPrinter(999, 2)
     files get("java") match {
       case Some(javas) => {
-        println("Compiling " + javas.size + " Java source files...")
-        Reader.process(javas, files getOrElse("jar", List())) foreach(e => println(pp.format(e)))
+        out.println("Compiling " + javas.size + " Java source files...")
+        Reader.process(javas, files getOrElse("jar", List())) foreach(e => out.println(e))
       }
-      case None => println("Found no .java files in " + root)
+      case None => out.println("Found no .java files in " + root)
     }
   }
 
