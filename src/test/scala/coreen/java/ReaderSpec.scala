@@ -200,8 +200,8 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val pkg = (cunit \ "def").head
     val clazz = (pkg \ "def").head
     val sig = (clazz \ "sig").text
-    // TODO: get extends and implements on separate lines
-    sig should equal("@Deprecated()\n" +
+    // TODO: put implements on separate line?
+    sig should equal("@Deprecated \n" +
                      "public class Foo extends Object implements Runnable")
     // println(pretty(cunit))
   }
@@ -373,6 +373,30 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val supers = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@supers").text)) toMap;
     supers("test.Foo") should equal("java.lang.Object")
     supers("test.Foo.A") should equal("java.lang.Comparable")
+  }
+
+  val argAnnAnn = """
+  package test;
+  @java.lang.annotation.Target(java.lang.annotation.ElementType.PARAMETER)
+  public @interface Test {}
+  """
+  val argAnnEx = """
+  package test;
+  public class Foo extends Object implements Runnable {
+    public Foo (@Test String test) {
+    }
+    public void run () {}
+  }
+  """
+
+  "Reader" should "correctly format signatures with parameter annotations" in {
+    val cunit = Reader.process(List("Foo.java" -> argAnnEx, "Test.java" -> argAnnAnn)) head
+    val pkg = (cunit \ "def").head
+    val clazz = (pkg \ "def").head
+    val ctor = (clazz \ "def").head
+    val sig = (ctor \ "sig").text
+    sig should equal("public Foo(@Test String test);")
+    // println(pretty(cunit))
   }
 
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)

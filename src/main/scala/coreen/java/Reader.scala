@@ -3,8 +3,7 @@
 
 package coreen.java
 
-import java.io.File
-import java.io.StringWriter
+import java.io.{File, StringWriter, Writer}
 import java.util.regex.{Pattern, Matcher}
 import java.net.{URI, URL}
 
@@ -46,6 +45,13 @@ object Reader
    */
   def process (filename :String, content :String) :Elem =
     process0(List(mkTestObject(filename, content)), List()) head
+
+  /**
+   * Processes the supplied (filename, source text) pairs.
+   * @return a list of {@code <compunit>} elements containing the source code's defs and uses.
+   */
+  def process (sources :List[(String, String)]) :Iterable[Elem] =
+    process0(sources.map(p => mkTestObject(p._1, p._2)), List())
 
   private def process0 (files :List[JavaFileObject], classpath :Seq[File]) :Iterable[Elem] = {
     val cpopt = if (classpath.length == 0) Nil
@@ -117,7 +123,11 @@ object Reader
       val ocname = _curclass.name
       _curclass.name = _curclass.name.table.fromString(clid)
       val sig = new StringWriter
-      new Pretty(sig, false) {
+      new SigPrinter(sig) {
+        override def printAnnotations (trees :JCList[JCAnnotation]) {
+          super.printAnnotations(trees)
+          if (!trees.isEmpty) println
+        }
         override def printBlock (stats :JCList[_ <: JCTree]) { /* noop! */ }
         override def printEnumBody (stats :JCList[JCTree]) { /* noop! */ }
       }.printExpr(_curclass)
@@ -164,11 +174,6 @@ object Reader
 
       // don't emit a def for synthesized ctors
       if (!hasFlag(_curmeth.mods, Flags.GENERATEDCONSTR)) {
-        val sig = new StringWriter
-        new Pretty(sig, false) {
-          override def printStat (stat :JCTree) { /* noop! */ }
-        }.printExpr(_curmeth)
-
         val isCtor = (_curmeth.name.toString == "<init>")
         val flavor = if (isCtor) "constructor"
                      else if (hasFlag(_curclass.mods, Flags.INTERFACE) ||
@@ -180,10 +185,20 @@ object Reader
         val access = if (hasFlag(_curclass.mods.flags, Flags.INTERFACE)) "public"
                      else flagsToAccess(_curmeth.mods.flags)
 
+        val name = if (isCtor) _curclass.name else _curmeth.name
+        val sig = new StringWriter
+        new SigPrinter(sig) {
+          override def visitMethodDef (tree :JCMethodDecl) {
+            val obody = tree.body
+            tree.body = null
+            super.visitMethodDef(tree)
+            tree.body = obody
+          }
+        }.setEnclClassName(_curclass.name).printExpr(_curmeth)
+
         val supers = Option(_curmeth.sym) flatMap(findSuperMethod) map(
           s => targetForSym(_curmeth.name, s)) getOrElse("")
 
-        val name = if (isCtor) _curclass.name else _curmeth.name
         val methid = (if (_curmeth.`type` == null) "" else _curmeth.`type`).toString
         withId(_curid + "." + name + methid) {
           buf += <def name={name.toString} id={_curid} type="func"
@@ -205,8 +220,16 @@ object Reader
 
     override def visitVariable (node :VariableTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCVariableDecl]
-      val oinit = tree.init
-      val sig = try { tree.init = null ; tree.toString } finally { tree.init = oinit }
+
+      val sig = new StringWriter
+      new SigPrinter(sig) {
+        override def visitVarDef (tree :JCVariableDecl) {
+          val oinit = tree.init
+          tree.init = null
+          super.visitVarDef(tree)
+          tree.init = oinit
+        }
+      }.printExpr(tree)
 
       val flavor = if (_curmeth == null) {
                      if (hasFlag(tree.mods, Flags.STATIC)) "static_field"
@@ -433,6 +456,36 @@ object Reader
     private var _curid :String = _
     private var _text :String = _
   }
+
+  private class SigPrinter (out :Writer) extends Pretty(out, false) {
+    def setEnclClassName (enclClassName :Name) = {
+      _enclClassField.set(this, enclClassName)
+      this
+    }
+    override def printAnnotations (trees :JCList[JCAnnotation]) {
+      var l = trees;
+      while (l.nonEmpty) {
+        printStat(l.head)
+        print(" ")
+        l = l.tail
+      }
+    }
+    override def visitAnnotation (tree :JCAnnotation) {
+      // we skip override annotations in our signatures
+      if (!IgnoredAnnotations(tree.annotationType.toString)) {
+        print("@")
+        printExpr(tree.annotationType)
+        if (tree.args != null && !tree.args.isEmpty) {
+          print("(")
+          printExprs(tree.args)
+          print(")")
+        }
+      }
+    }
+  }
+  private val IgnoredAnnotations = Set("Override", "SuppressWarnings")
+  private val _enclClassField = classOf[Pretty].getDeclaredField("enclClassName")
+  /* Reader ctor */ _enclClassField.setAccessible(true)
 
   private val _scanner = new Scanner
   private val _compiler = com.sun.tools.javac.api.JavacTool.create
