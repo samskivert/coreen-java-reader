@@ -131,7 +131,7 @@ object Reader
         override def printBlock (stats :JCList[_ <: JCTree]) { /* noop! */ }
         override def printEnumBody (stats :JCList[JCTree]) { /* noop! */ }
       }.printExpr(_curclass)
-      val sig = sigw.toString.trim.replace(" implements ", "\n  implements") /* hack! */
+      val sig = sigw.toString.trim.replace(" implements ", "\n  implements ") /* hack! */
       _curclass.name = ocname
 
       val cname = if (isAnon) {
