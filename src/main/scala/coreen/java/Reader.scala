@@ -222,8 +222,8 @@ object Reader
     override def visitVariable (node :VariableTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCVariableDecl]
 
-      val sig = new StringWriter
-      new SigPrinter(sig) {
+      val sigw = new StringWriter
+      new SigPrinter(sigw) {
         override def visitVarDef (tree :JCVariableDecl) {
           val oinit = tree.init
           tree.init = null
@@ -231,6 +231,8 @@ object Reader
           tree.init = oinit
         }
       }.printExpr(tree)
+      // filter out the wacky crap Pretty puts in for enums
+      val sig = sigw.toString.trim.replace("/*public static final*/ ", "")
 
       val flavor = if (_curmeth == null) {
                      if (hasFlag(tree.mods, Flags.STATIC)) "static_field"
@@ -247,10 +249,10 @@ object Reader
         // add a symtab mapping for this vardef
         if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
         val varend = tree.vartype.getEndPosition(_curunit.endPositions)
+        val start = _text.indexOf(tree.name.toString, varend)
+        val bodyStart = if (tree.getStartPosition == -1) start else tree.getStartPosition
         buf += <def name={tree.name.toString} id={_curid} type="term" flavor={flavor}
-                    access={access}
-                    start={_text.indexOf(tree.name.toString, varend).toString}
-                    bodyStart={tree.getStartPosition.toString}
+                    access={access} start={start.toString} bodyStart={bodyStart.toString}
                     bodyEnd={tree.getEndPosition(_curunit.endPositions).toString}>
                  <sig>{sig}</sig><doc>{doc}</doc>{
                    if (hasFlag(tree.mods, Flags.ENUM)) NodeSeq.Empty

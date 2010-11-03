@@ -200,9 +200,8 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val pkg = (cunit \ "def").head
     val clazz = (pkg \ "def").head
     val sig = (clazz \ "sig").text
-    // TODO: put implements on separate line?
     sig should equal("@Deprecated \n" +
-                     "public class Foo extends Object implements Runnable")
+                     "public class Foo extends Object\n  implements Runnable")
     // println(pretty(cunit))
   }
 
@@ -397,6 +396,25 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val sig = (ctor \ "sig").text
     sig should equal("public Foo(@Test String test);")
     // println(pretty(cunit))
+  }
+
+  val enumEx = """
+  package test;
+  public enum Foo {
+    BAR, BAZ, BIF;
+  }
+  """
+
+  "Reader" should "correctly handle enums" in {
+    val cunit = Reader.process("Foo.java", enumEx)
+    val pkg = (cunit \ "def").head
+    val clazz = (pkg \ "def").head
+    val bar = (clazz \ "def")(0)
+    val baz = (clazz \ "def")(1)
+    val bif = (clazz \ "def")(2)
+    (bar \ "sig").text should equal ("BAR")
+    (baz \ "sig").text should equal ("BAZ")
+    (bif \ "sig").text should equal ("BIF")
   }
 
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)
