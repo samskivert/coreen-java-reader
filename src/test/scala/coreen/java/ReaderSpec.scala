@@ -63,6 +63,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val pkg = (cunit \ "def").head
     val clazz = (pkg \ "def").head
     testB.indexOf("@Deprecated") should equal((clazz \ "@bodyStart").text.toInt)
+    // println(pretty(cunit))
   }
 
   val missing = """
@@ -334,7 +335,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val supers = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@supers").text)) toMap;
     // println(supers)
     supers("test.Foo") should equal("java.lang.Object")
-    supers("test.Foo.A") should equal("java.lang.Object java.lang.Runnable")
+    supers("test.Foo.A") should equal("java.lang.Runnable")
   }
 
   val superMethodEx = """
@@ -370,7 +371,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val pkg = (cunit \ "def").head
     val supers = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@supers").text)) toMap;
     supers("test.Foo") should equal("java.lang.Object")
-    supers("test.Foo.A") should equal("java.lang.Object java.lang.Comparable")
+    supers("test.Foo.A") should equal("java.lang.Comparable")
   }
 
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)

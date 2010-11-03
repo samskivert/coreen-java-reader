@@ -15,7 +15,7 @@ import javax.tools.ToolProvider
 
 import com.sun.source.tree._
 import com.sun.source.util.{JavacTask, TreePathScanner}
-import com.sun.tools.javac.code.{Flags, Symbol, Types, TypeTags}
+import com.sun.tools.javac.code.{Flags, Symbol, Type, Types, TypeTags}
 import com.sun.tools.javac.code.Symbol._
 import com.sun.tools.javac.tree.JCTree._
 import com.sun.tools.javac.tree.{JCTree, Pretty}
@@ -132,9 +132,11 @@ object Reader
                    else if (hasFlag(_curclass.mods, Flags.ABSTRACT)) "abstract_class"
                    else "class"
 
-      val supers = Option(_curclass.`type`).toList flatMap(
-        t => _types.interfaces(t).prepend(_types.supertype(t)).asScala) map(
-          _types.erasure(_)) mkString(" ")
+      def getSupers (t :Type) =
+        if (t == null) Nil
+        else if (t.isInterface) _types.interfaces(t).asScala
+        else _types.interfaces(t).prepend(_types.supertype(t)).asScala
+      val supers = getSupers(_curclass.`type`) map(_types.erasure(_)) mkString(" ")
 
       val ocount = _anoncount
       _anoncount = 0
