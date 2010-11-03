@@ -32,8 +32,10 @@ object Main
     val files = collectFiles(root, filter)
     val pp = new PrettyPrinter(999, 2)
     files get("java") match {
-      case Some(javas) => Reader.process(javas, files getOrElse("jar", List())) foreach(
-        e => println(pp.format(e)))
+      case Some(javas) => {
+        println("Compiling " + javas.size + " Java source files...")
+        Reader.process(javas, files getOrElse("jar", List())) foreach(e => println(pp.format(e)))
+      }
       case None => println("Found no .java files in " + root)
     }
   }
