@@ -87,7 +87,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     (outer \ "@name").text should equal("Foo");
     val main = (outer \ "def").head
     val bar = (main \ "def").tail.head
-    (bar \ "@sig").text should equal("Bar bar") // no type info for 'Bar'
+    (bar \ "sig").text should equal("Bar bar") // no type info for 'Bar'
   }
 
   val extendsEx = """
@@ -173,12 +173,12 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val cunit = Reader.process("Foo.java", docEx)
     val pkg = (cunit \ "def").head
     val clazz = (pkg \ "def").head
-    (clazz \ "@doc").text should equal("This has some code <code>foo &lt; bar</code>. " +
-                                       "And some more code <code>bar &gt; foo</code>.\n" +
-                                       "And a &lt;literal&gt;.") // @author and @since stripped
+    (clazz \ "doc").text should equal("This has some code <code>foo &lt; bar</code>. " +
+                                      "And some more code <code>bar &gt; foo</code>.\n" +
+                                      "And a &lt;literal&gt;.") // @author and @since stripped
     val ctor = (clazz \ "def").head
-    (ctor \ "@doc").text should equal("This makes a foo.<dl>\n" + // TEMP @param hackery
-                                      "<dt>monkey</dt><dd>a monkey for your foo.</dd></dl>")
+    (ctor \ "doc").text should equal("This makes a foo.<dl>\n" + // TEMP @param hackery
+                                     "<dt>monkey</dt><dd>a monkey for your foo.</dd></dl>")
     // println(pretty(cunit))
   }
 
@@ -199,10 +199,11 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val cunit = Reader.process("Foo.java", annotationEx)
     val pkg = (cunit \ "def").head
     val clazz = (pkg \ "def").head
-    val sig = (clazz \ "@sig").text
+    val sig = (clazz \ "sig").text
     // TODO: get extends and implements on separate lines
     sig should equal("@Deprecated()\n" +
                      "public class Foo extends Object implements Runnable")
+    // println(pretty(cunit))
   }
 
   val nlInDocEx = """
@@ -222,7 +223,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val cunit = Reader.process("Foo.java", nlInDocEx)
     val pkg = (cunit \ "def").head
     val clazz = (pkg \ "def").head
-    val doc = (clazz \ "@doc").text
+    val doc = (clazz \ "doc").text
     doc should equal("Here's some docs with a newline.\n" +
                      "<code>foo.bar().\n" +
                      "   .baz();\n" +

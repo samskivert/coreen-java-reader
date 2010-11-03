@@ -35,7 +35,7 @@ object Main
     files get("java") match {
       case Some(javas) => {
         out.println("Compiling " + javas.size + " Java source files...")
-        Reader.process(javas, files getOrElse("jar", List())) foreach(e => out.println(pp.format(e)))
+        Reader.process(javas, files getOrElse("jar", List())) foreach(e => out.println(e))
       }
       case None => out.println("Found no .java files in " + root)
     }

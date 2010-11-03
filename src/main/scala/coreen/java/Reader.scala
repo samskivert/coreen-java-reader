@@ -96,9 +96,11 @@ object Reader
       _curunit = node.asInstanceOf[JCCompilationUnit]
       withId(_curunit.packge.toString) {
         buf += <def name={_curunit.packge.toString} id={_curid} type="module" flavor="none"
-                    access={"public"} sig={_curunit.packge.toString}
-                    start={_text.indexOf(_curunit.packge.toString, _curunit.pos).toString}
-               >{capture(super.visitCompilationUnit(node, _))}</def>
+                    access={"public"}
+                    start={_text.indexOf(_curunit.packge.toString, _curunit.pos).toString}>
+                 <sig>{_curunit.packge.toString}</sig>{
+                    capture(super.visitCompilationUnit(node, _))
+                 }</def>
       }
       _curunit = oldunit
     }
@@ -145,11 +147,12 @@ object Reader
         // in the user interface; we eventually probably want to be more explicit about this
         buf += <def name={_curclass.name.toString} id={_curid} type="type" flavor={flavor}
                     access={flagsToAccess(_curclass.mods.flags)} supers={supers}
-                    sig={sig.toString.trim} doc={findDoc(_curclass.getStartPosition)}
                     start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
                     bodyStart={_curclass.getStartPosition.toString}
-                    bodyEnd={_curclass.getEndPosition(_curunit.endPositions).toString}
-               >{capture(super.visitClass(node, _))}</def>
+                    bodyEnd={_curclass.getEndPosition(_curunit.endPositions).toString}>
+                 <sig>{sig.toString.trim}</sig><doc>{findDoc(_curclass.getStartPosition)}</doc>{
+                   capture(super.visitClass(node, _))
+                 }</def>
       }
       _curclass = oclass
       _anoncount = ocount
@@ -185,11 +188,12 @@ object Reader
         withId(_curid + "." + name + methid) {
           buf += <def name={name.toString} id={_curid} type="func"
                       flavor={flavor} access={access} supers={supers}
-                      sig={sig.toString.trim} doc={findDoc(_curmeth.getStartPosition)}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
                       bodyStart={_curmeth.getStartPosition.toString}
-                      bodyEnd={_curmeth.getEndPosition(_curunit.endPositions).toString}
-                 >{capture(super.visitMethod(node, _))}</def>
+                      bodyEnd={_curmeth.getEndPosition(_curunit.endPositions).toString}>
+                   <sig>{sig.toString.trim}</sig><doc>{findDoc(_curmeth.getStartPosition)}</doc>{
+                     capture(super.visitMethod(node, _))
+                   }</def>
         }
       }
       _curmeth = ometh
@@ -220,12 +224,14 @@ object Reader
         if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
         val varend = tree.vartype.getEndPosition(_curunit.endPositions)
         buf += <def name={tree.name.toString} id={_curid} type="term" flavor={flavor}
-                    access={access} sig={sig} doc={doc}
+                    access={access}
                     start={_text.indexOf(tree.name.toString, varend).toString}
                     bodyStart={tree.getStartPosition.toString}
-                    bodyEnd={tree.getEndPosition(_curunit.endPositions).toString}
-               >{ if (hasFlag(tree.mods, Flags.ENUM)) NodeSeq.Empty
-                  else capture(super.visitVariable(node, _)) }</def>
+                    bodyEnd={tree.getEndPosition(_curunit.endPositions).toString}>
+                 <sig>{sig}</sig><doc>{doc}</doc>{
+                   if (hasFlag(tree.mods, Flags.ENUM)) NodeSeq.Empty
+                   else capture(super.visitVariable(node, _))
+                 }</def>
       }
     }
 
