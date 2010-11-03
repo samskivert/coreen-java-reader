@@ -122,8 +122,8 @@ object Reader
       // name that will be later assigned by the compiler EnclosingClass$N
       val ocname = _curclass.name
       _curclass.name = _curclass.name.table.fromString(clid)
-      val sig = new StringWriter
-      new SigPrinter(sig) {
+      val sigw = new StringWriter
+      new SigPrinter(sigw) {
         override def printAnnotations (trees :JCList[JCAnnotation]) {
           super.printAnnotations(trees)
           if (!trees.isEmpty) println
@@ -131,6 +131,7 @@ object Reader
         override def printBlock (stats :JCList[_ <: JCTree]) { /* noop! */ }
         override def printEnumBody (stats :JCList[JCTree]) { /* noop! */ }
       }.printExpr(_curclass)
+      val sig = sigw.toString.trim.replace(" implements ", "\n  implements") /* hack! */
       _curclass.name = ocname
 
       val cname = if (isAnon) {
@@ -160,7 +161,7 @@ object Reader
                     start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
                     bodyStart={_curclass.getStartPosition.toString}
                     bodyEnd={_curclass.getEndPosition(_curunit.endPositions).toString}>
-                 <sig>{sig.toString.trim}</sig><doc>{findDoc(_curclass.getStartPosition)}</doc>{
+                 <sig>{sig}</sig><doc>{findDoc(_curclass.getStartPosition)}</doc>{
                    capture(super.visitClass(node, _))
                  }</def>
       }
