@@ -101,7 +101,7 @@ object Reader
       val oldunit = _curunit
       _curunit = node.asInstanceOf[JCCompilationUnit]
       withId(_curunit.packge.toString) {
-        buf += <def name={_curunit.packge.toString} id={_curid} type="module" kind="none"
+        buf += <def name={_curunit.packge.toString} id={_curid} kind="module" flavor="none"
                     access={"public"}
                     start={_text.indexOf(_curunit.packge.toString, _curunit.pos).toString}>
                  <sig>{_curunit.packge.toString}</sig>{
@@ -139,7 +139,7 @@ object Reader
         else _curclass.implementing.toString
       } else clid
 
-      val kind = if (hasFlag(_curclass.mods, Flags.ANNOTATION)) "annotation"
+      val flavor = if (hasFlag(_curclass.mods, Flags.ANNOTATION)) "annotation"
                  else if (hasFlag(_curclass.mods, Flags.ENUM)) "enum"
                  else if (hasFlag(_curclass.mods, Flags.INTERFACE)) "interface"
                  else if (hasFlag(_curclass.mods, Flags.ABSTRACT)) "abstract_class"
@@ -156,7 +156,7 @@ object Reader
       withId(_curid + "." + clid) {
         // we allow the name to be "" for anonymous classes so that they can be properly filtered
         // in the user interface; we eventually probably want to be more explicit about this
-        buf += <def name={_curclass.name.toString} id={_curid} type="type" kind={kind}
+        buf += <def name={_curclass.name.toString} id={_curid} kind="type" flavor={flavor}
                     access={flagsToAccess(_curclass.mods.flags)} supers={supers}
                     start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
                     bodyStart={_curclass.getStartPosition.toString}
@@ -176,7 +176,7 @@ object Reader
       // don't emit a def for synthesized ctors
       if (!hasFlag(_curmeth.mods, Flags.GENERATEDCONSTR)) {
         val isCtor = (_curmeth.name.toString == "<init>")
-        val kind = if (isCtor) "constructor"
+        val flavor = if (isCtor) "constructor"
                    else if (hasFlag(_curclass.mods, Flags.INTERFACE) ||
                             hasFlag(_curmeth.mods, Flags.ABSTRACT)) "abstract_method"
                    else if (hasFlag(_curmeth.mods, Flags.STATIC)) "static_method"
@@ -202,8 +202,8 @@ object Reader
 
         val methid = (if (_curmeth.`type` == null) "" else _curmeth.`type`).toString
         withId(_curid + "." + name + methid) {
-          buf += <def name={name.toString} id={_curid} type="func"
-                      kind={kind} access={access} supers={supers}
+          buf += <def name={name.toString} id={_curid} kind="func"
+                      flavor={flavor} access={access} supers={supers}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
                       bodyStart={_curmeth.getStartPosition.toString}
                       bodyEnd={_curmeth.getEndPosition(_curunit.endPositions).toString}>
@@ -234,12 +234,12 @@ object Reader
       // filter out the wacky crap Pretty puts in for enums
       val sig = sigw.toString.trim.replace("/*public static final*/ ", "")
 
-      val kind = if (_curmeth == null) {
+      val flavor = if (_curmeth == null) {
                    if (hasFlag(tree.mods, Flags.STATIC)) "static_field"
                    else "field"
                  } else if (hasFlag(tree.mods, Flags.PARAMETER)) "param"
                    else "local"
-      val access = kind match {
+      val access = flavor match {
         case "static_field" | "field" => flagsToAccess(tree.mods.flags)
         case _ => "default"
       }
@@ -251,7 +251,7 @@ object Reader
         val varend = tree.vartype.getEndPosition(_curunit.endPositions)
         val start = _text.indexOf(tree.name.toString, varend)
         val bodyStart = if (tree.getStartPosition == -1) start else tree.getStartPosition
-        buf += <def name={tree.name.toString} id={_curid} type="term" kind={kind}
+        buf += <def name={tree.name.toString} id={_curid} kind="term" flavor={flavor}
                     access={access} start={start.toString} bodyStart={bodyStart.toString}
                     bodyEnd={tree.getEndPosition(_curunit.endPositions).toString}>
                  <sig>{sig}</sig><doc>{doc}</doc>{

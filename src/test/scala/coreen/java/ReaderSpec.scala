@@ -248,7 +248,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     (uses(1) \ "@target").text should equal("test.Foo.B")
   }
 
-  val kindEx = """
+  val flavorEx = """
   package test;
   public class Foo {
     public interface A {
@@ -270,11 +270,11 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
   }
   """
 
-  "Reader" should "correctly assign kinds" in {
-    val cunit = Reader.process("Foo.java", kindEx)
+  "Reader" should "correctly assign flavors" in {
+    val cunit = Reader.process("Foo.java", flavorEx)
     val pkg = (cunit \ "def").head
     // println(pretty(cunit))
-    val flavs = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@kind").text)) toMap;
+    val flavs = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@flavor").text)) toMap;
     // println(flavs)
     flavs("test.Foo") should equal("class")
     flavs("test.Foo.A") should equal("interface")
