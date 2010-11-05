@@ -252,7 +252,7 @@ object Reader
       if (_curclass != null && // make sure we're not looking at an import
           tree.sym != null) {
         val target = targetForSym(tree.name, tree.sym)
-        buf += <use name={tree.name.toString} target={target}
+        buf += <use name={tree.name.toString} target={target} kind={kindForSym(tree.sym)}
                     start={tree.getStartPosition.toString}/>
       }
     }
@@ -264,7 +264,7 @@ object Reader
           tree.sym != null) {
         val target = targetForSym(tree.name, tree.sym)
         val selend = tree.selected.getEndPosition(_curunit.endPositions)
-        buf += <use name={tree.name.toString} target={target}
+        buf += <use name={tree.name.toString} target={target} kind={kindForSym(tree.sym)}
                     start={_text.indexOf(tree.name.toString, selend).toString}/>
       }
     }
@@ -446,6 +446,13 @@ object Reader
     private var _text :String = _
   }
 
+  private def kindForSym (sym :Symbol) = sym match {
+    case cs :ClassSymbol => "type"
+    case ms :MethodSymbol => "func"
+    case vs :VarSymbol => "term"
+    case _ => "unknown"
+  }
+
   private class SigPrinter (out :StringWriter, enclClassName :Name) extends Pretty(out, false) {
     // use nodes accumulated while printing a signature
     var uses = ArrayBuffer[Elem]()
@@ -539,7 +546,7 @@ object Reader
           case cs :ClassSymbol => _types.erasure(cs.`type`).toString
           case _ => Console.println("TODO? " + tree + " " + tree.sym); tree.sym.toString
         }
-        uses += <use name={tree.name.toString} target={target}
+        uses += <use name={tree.name.toString} target={target} kind={kindForSym(tree.sym)}
                      start={out.getBuffer.length.toString}/>
       }
       super.visitIdent(tree)
