@@ -120,19 +120,14 @@ object Reader
 
       // name in anon classes is "", but for signature generation we want to replace it with the
       // name that will be later assigned by the compiler EnclosingClass$N
-      val ocname = _curclass.name
-      _curclass.name = _curclass.name.table.fromString(clid)
       val sigw = new StringWriter
-      new SigPrinter(sigw) {
+      val sigp = new SigPrinter(sigw, _curclass.name.table.fromString(clid)) {
         override def printAnnotations (trees :JCList[JCAnnotation]) {
           super.printAnnotations(trees)
           if (!trees.isEmpty) println
         }
-        override def printBlock (stats :JCList[_ <: JCTree]) { /* noop! */ }
-        override def printEnumBody (stats :JCList[JCTree]) { /* noop! */ }
-      }.printExpr(_curclass)
-      val sig = sigw.toString.trim.replace(" implements ", "\n  implements ") /* hack! */
-      _curclass.name = ocname
+      }
+      sigp.printExpr(_curclass)
 
       val cname = if (isAnon) {
         if (_curclass.extending != null) _curclass.extending.toString
@@ -161,7 +156,8 @@ object Reader
                     start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
                     bodyStart={_curclass.getStartPosition.toString}
                     bodyEnd={_curclass.getEndPosition(_curunit.endPositions).toString}>
-                 <sig>{sig}</sig><doc>{findDoc(_curclass.getStartPosition)}</doc>{
+                 <sig>{sigw.toString}{sigp.uses}</sig>
+                 <doc>{findDoc(_curclass.getStartPosition)}</doc>{
                    capture(super.visitClass(node, _))
                  }</def>
       }
@@ -175,7 +171,7 @@ object Reader
 
       // don't emit a def for synthesized ctors
       if (!hasFlag(_curmeth.mods, Flags.GENERATEDCONSTR)) {
-        val isCtor = (_curmeth.name.toString == "<init>")
+        val isCtor = (_curmeth.name eq _curmeth.name.table.init)
         val flavor = if (isCtor) "constructor"
                    else if (hasFlag(_curclass.mods, Flags.INTERFACE) ||
                             hasFlag(_curmeth.mods, Flags.ABSTRACT)) "abstract_method"
@@ -188,14 +184,8 @@ object Reader
 
         val name = if (isCtor) _curclass.name else _curmeth.name
         val sig = new StringWriter
-        new SigPrinter(sig) {
-          override def visitMethodDef (tree :JCMethodDecl) {
-            val obody = tree.body
-            tree.body = null
-            super.visitMethodDef(tree)
-            tree.body = obody
-          }
-        }.setEnclClassName(_curclass.name).printExpr(_curmeth)
+        val sigp = new SigPrinter(sig, _curclass.name)
+        sigp.printExpr(_curmeth)
 
         val supers = Option(_curmeth.sym) flatMap(findSuperMethod) map(
           s => targetForSym(_curmeth.name, s)) getOrElse("")
@@ -207,7 +197,8 @@ object Reader
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
                       bodyStart={_curmeth.getStartPosition.toString}
                       bodyEnd={_curmeth.getEndPosition(_curunit.endPositions).toString}>
-                   <sig>{sig.toString.trim}</sig><doc>{findDoc(_curmeth.getStartPosition)}</doc>{
+                   <sig>{sig.toString.trim}{sigp.uses}</sig>
+                   <doc>{findDoc(_curmeth.getStartPosition)}</doc>{
                      capture(super.visitMethod(node, _))
                    }</def>
         }
@@ -223,14 +214,9 @@ object Reader
       val tree = node.asInstanceOf[JCVariableDecl]
 
       val sigw = new StringWriter
-      new SigPrinter(sigw) {
-        override def visitVarDef (tree :JCVariableDecl) {
-          val oinit = tree.init
-          tree.init = null
-          super.visitVarDef(tree)
-          tree.init = oinit
-        }
-      }.printExpr(tree)
+      val sigp = new SigPrinter(sigw, _curclass.name)
+      sigp.printExpr(tree)
+
       // filter out the wacky crap Pretty puts in for enums
       val sig = sigw.toString.trim.replace("/*public static final*/ ", "")
 
@@ -254,7 +240,7 @@ object Reader
         buf += <def name={tree.name.toString} id={_curid} kind="term" flavor={flavor}
                     access={access} start={start.toString} bodyStart={bodyStart.toString}
                     bodyEnd={tree.getEndPosition(_curunit.endPositions).toString}>
-                 <sig>{sig}</sig><doc>{doc}</doc>{
+                 <sig>{sig}{sigp.uses}</sig><doc>{doc}</doc>{
                    if (hasFlag(tree.mods, Flags.ENUM)) NodeSeq.Empty
                    else capture(super.visitVariable(node, _))
                  }</def>
@@ -460,19 +446,73 @@ object Reader
     private var _text :String = _
   }
 
-  private class SigPrinter (out :Writer) extends Pretty(out, false) {
-    def setEnclClassName (enclClassName :Name) = {
-      _enclClassField.set(this, enclClassName)
-      this
-    }
+  private class SigPrinter (out :StringWriter, enclClassName :Name) extends Pretty(out, false) {
+    // use nodes accumulated while printing a signature
+    var uses = ArrayBuffer[Elem]()
+
+    override def printBlock (stats :JCList[_ <: JCTree]) { /* noop! */ }
+    override def printEnumBody (stats :JCList[JCTree]) { /* noop! */ }
     override def printAnnotations (trees :JCList[JCAnnotation]) {
-      var l = trees;
+      var l = trees
       while (l.nonEmpty) {
         printStat(l.head)
         print(" ")
         l = l.tail
       }
     }
+
+    override def visitClassDef (tree :JCClassDecl) {
+      printAnnotations(tree.mods.annotations)
+      printFlags(tree.mods.flags & ~Flags.INTERFACE)
+      if ((tree.mods.flags & Flags.INTERFACE) != 0) {
+        print("interface " + enclClassName)
+        printTypeParameters(tree.typarams)
+        if (tree.implementing.nonEmpty()) {
+          print(" extends ")
+          printExprs(tree.implementing)
+        }
+      } else {
+        if ((tree.mods.flags & Flags.ENUM) != 0) 
+          print("enum " + enclClassName)
+        else
+          print("class " + enclClassName)
+        printTypeParameters(tree.typarams)
+        if (tree.extending != null) {
+          print(" extends ")
+          printExpr(tree.extending)
+        }
+        if (tree.implementing.nonEmpty()) {
+          print("\n  implements ")
+          printExprs(tree.implementing)
+        }
+      }
+    }
+
+    override def visitMethodDef (tree :JCMethodDecl) {
+      // only print non-anonymous constructors
+      if (tree.name != tree.name.table.init || enclClassName != null) {
+        printExpr(tree.mods)
+        printTypeParameters(tree.typarams)
+        if (tree.name == tree.name.table.init) {
+          print(enclClassName)
+        } else {
+          printExpr(tree.restype)
+          print(" " + tree.name)
+        }
+        print("(")
+        printExprs(tree.params)
+        print(")")
+        if (tree.thrown.nonEmpty()) {
+          print("\n  throws ")
+          printExprs(tree.thrown)
+        }
+        if (tree.defaultValue != null) {
+          print(" default ")
+          printExpr(tree.defaultValue)
+        }
+      }
+    }
+
     override def visitAnnotation (tree :JCAnnotation) {
       // we skip override annotations in our signatures
       if (!IgnoredAnnotations(tree.annotationType.toString)) {
@@ -485,7 +525,27 @@ object Reader
         }
       }
     }
+
+    override def visitVarDef (tree :JCVariableDecl) {
+      val oinit = tree.init
+      tree.init = null
+      super.visitVarDef(tree)
+      tree.init = oinit
+    }
+
+    override def visitIdent (tree :JCIdent) {
+      if (tree.sym != null) {
+        val target = tree.sym match {
+          case cs :ClassSymbol => _types.erasure(cs.`type`).toString
+          case _ => Console.println("TODO? " + tree + " " + tree.sym); tree.sym.toString
+        }
+        uses += <use name={tree.name.toString} target={target}
+                     start={out.getBuffer.length.toString}/>
+      }
+      super.visitIdent(tree)
+    }
   }
+
   private val IgnoredAnnotations = Set("Override", "SuppressWarnings")
   private val _enclClassField = classOf[Pretty].getDeclaredField("enclClassName")
   /* Reader ctor */ _enclClassField.setAccessible(true)

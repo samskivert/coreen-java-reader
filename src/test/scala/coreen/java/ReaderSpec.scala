@@ -243,7 +243,8 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val cunit = Reader.process("Foo.java", paramTypeEx)
     val pkg = (cunit \ "def").head
     val uses = pkg \\ "use"
-    uses.length should equal(2)
+    println(cunit) // pretty(cunit))
+    uses.length should equal(6)
     (uses(0) \ "@target").text should equal("test.Foo.A")
     (uses(1) \ "@target").text should equal("test.Foo.B")
   }
@@ -394,7 +395,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val clazz = (pkg \ "def").head
     val ctor = (clazz \ "def").head
     val sig = (ctor \ "sig").text
-    sig should equal("public Foo(@Test String test);")
+    sig should equal("public Foo(@Test String test)")
     // println(pretty(cunit))
   }
 
