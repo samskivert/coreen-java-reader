@@ -156,7 +156,7 @@ object Reader
                     start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
                     bodyStart={_curclass.getStartPosition.toString}
                     bodyEnd={_curclass.getEndPosition(_curunit.endPositions).toString}>
-                 <sig>{sigw.toString}{sigp.uses}</sig>
+                 <sig>{sigw.toString}{sigp.elems}</sig>
                  <doc>{findDoc(_curclass.getStartPosition)}</doc>{
                    capture(super.visitClass(node, _))
                  }</def>
@@ -197,7 +197,7 @@ object Reader
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
                       bodyStart={_curmeth.getStartPosition.toString}
                       bodyEnd={_curmeth.getEndPosition(_curunit.endPositions).toString}>
-                   <sig>{sig.toString.trim}{sigp.uses}</sig>
+                   <sig>{sig.toString.trim}{sigp.elems}</sig>
                    <doc>{findDoc(_curmeth.getStartPosition)}</doc>{
                      capture(super.visitMethod(node, _))
                    }</def>
@@ -240,7 +240,7 @@ object Reader
         buf += <def name={tree.name.toString} id={_curid} kind="term" flavor={flavor}
                     access={access} start={start.toString} bodyStart={bodyStart.toString}
                     bodyEnd={tree.getEndPosition(_curunit.endPositions).toString}>
-                 <sig>{sig}{sigp.uses}</sig><doc>{doc}</doc>{
+                 <sig>{sig}{sigp.elems}</sig><doc>{doc}</doc>{
                    if (hasFlag(tree.mods, Flags.ENUM)) NodeSeq.Empty
                    else capture(super.visitVariable(node, _))
                  }</def>
@@ -455,7 +455,7 @@ object Reader
 
   private class SigPrinter (out :StringWriter, enclClassName :Name) extends Pretty(out, false) {
     // use nodes accumulated while printing a signature
-    var uses = ArrayBuffer[Elem]()
+    var elems = ArrayBuffer[Elem]()
 
     override def printBlock (stats :JCList[_ <: JCTree]) { /* noop! */ }
     override def printEnumBody (stats :JCList[JCTree]) { /* noop! */ }
@@ -469,10 +469,12 @@ object Reader
     }
 
     override def visitClassDef (tree :JCClassDecl) {
+      var cpos = 0
       printAnnotations(tree.mods.annotations)
       printFlags(tree.mods.flags & ~Flags.INTERFACE)
       if ((tree.mods.flags & Flags.INTERFACE) != 0) {
         print("interface " + enclClassName)
+        cpos = out.getBuffer.length - enclClassName.toString.length
         printTypeParameters(tree.typarams)
         if (tree.implementing.nonEmpty()) {
           print(" extends ")
@@ -483,6 +485,7 @@ object Reader
           print("enum " + enclClassName)
         else
           print("class " + enclClassName)
+        cpos = out.getBuffer.length - enclClassName.toString.length
         printTypeParameters(tree.typarams)
         if (tree.extending != null) {
           print(" extends ")
@@ -493,17 +496,24 @@ object Reader
           printExprs(tree.implementing)
         }
       }
+      elems += <sigdef name={enclClassName.toString} kind="type" start={cpos.toString}/>
     }
 
     override def visitMethodDef (tree :JCMethodDecl) {
       // only print non-anonymous constructors
       if (tree.name != tree.name.table.init || enclClassName != null) {
+        var mname = ""
+        var mpos = 0
         printExpr(tree.mods)
         printTypeParameters(tree.typarams)
         if (tree.name == tree.name.table.init) {
+          mpos = out.getBuffer.length
+          mname = enclClassName.toString
           print(enclClassName)
         } else {
           printExpr(tree.restype)
+          mpos = out.getBuffer.length+1
+          mname = tree.name.toString
           print(" " + tree.name)
         }
         print("(")
@@ -517,6 +527,7 @@ object Reader
           print(" default ")
           printExpr(tree.defaultValue)
         }
+        elems += <sigdef name={mname} kind="func" start={mpos.toString}/>
       }
     }
 
@@ -538,6 +549,8 @@ object Reader
       tree.init = null
       super.visitVarDef(tree)
       tree.init = oinit
+      val vpos = out.getBuffer.length-tree.name.toString.length
+      elems += <sigdef name={tree.name.toString} kind="term" start={vpos.toString}/>
     }
 
     override def visitIdent (tree :JCIdent) {
@@ -546,7 +559,7 @@ object Reader
           case cs :ClassSymbol => _types.erasure(cs.`type`).toString
           case _ => Console.println("TODO? " + tree + " " + tree.sym); tree.sym.toString
         }
-        uses += <use name={tree.name.toString} target={target} kind={kindForSym(tree.sym)}
+        elems += <use name={tree.name.toString} target={target} kind={kindForSym(tree.sym)}
                      start={out.getBuffer.length.toString}/>
       }
       super.visitIdent(tree)
