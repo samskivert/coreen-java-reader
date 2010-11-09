@@ -337,8 +337,9 @@ object Reader
       } else {
         // TODO: we need to do a bunch of stuff for Javadoc symbol resolution
         val (tname, mname) = (text.substring(0, hidx), text.substring(hidx+1))
-        (mname, Option(_curclass) flatMap(
+        if (tname == "") (mname, Option(_curclass) flatMap(
           cc => lookup(cc.sym.members, cc.name.table.fromString(mname))))
+        else (mname, None)
       }
     }
 
