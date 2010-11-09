@@ -156,7 +156,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
    * @since 9.99
    */
   public class Foo {
-    /** This makes a foo.
+    /** This makes a foo. Beware of {@link #funnyBiz}.
      * @param monkey a monkey for your foo.
      */
     public Foo (String monkey) {
@@ -177,9 +177,11 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
                                       "And some more code <code>bar &gt; foo</code>.\n" +
                                       "And a &lt;literal&gt;.") // @author and @since stripped
     val ctor = (clazz \ "def").head
-    (ctor \ "doc").text should equal("This makes a foo.<dl>\n" + // TEMP @param hackery
-                                     "<dt>monkey</dt><dd>a monkey for your foo.</dd></dl>")
+    (ctor \ "doc").text should equal("This makes a foo. Beware of <code>funnyBiz</code>." +
+                                     "<dl>\n<dt>monkey</dt><dd>a monkey for your foo.</dd></dl>")
     // println(pretty(cunit))
+    // println((ctor \ "doc").text)
+    // println(ctor \ "doc" \\ "use")
   }
 
   val annotationEx = """

@@ -14,7 +14,7 @@ import javax.tools.ToolProvider
 
 import com.sun.source.tree._
 import com.sun.source.util.{JavacTask, TreePathScanner}
-import com.sun.tools.javac.code.{Flags, Symbol, Type, Types, TypeTags}
+import com.sun.tools.javac.code.{Flags, Scope, Symbol, Type, Types, TypeTags}
 import com.sun.tools.javac.code.Symbol._
 import com.sun.tools.javac.tree.JCTree._
 import com.sun.tools.javac.tree.{JCTree, Pretty}
@@ -156,8 +156,7 @@ object Reader
                     start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
                     bodyStart={_curclass.getStartPosition.toString}
                     bodyEnd={_curclass.getEndPosition(_curunit.endPositions).toString}>
-                 <sig>{sigw.toString}{sigp.elems}</sig>
-                 <doc>{findDoc(_curclass.getStartPosition)}</doc>{
+                 <sig>{sigw.toString}{sigp.elems}</sig>{findDoc(_curclass.getStartPosition)}{
                    capture(super.visitClass(node, _))
                  }</def>
       }
@@ -197,8 +196,7 @@ object Reader
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
                       bodyStart={_curmeth.getStartPosition.toString}
                       bodyEnd={_curmeth.getEndPosition(_curunit.endPositions).toString}>
-                   <sig>{sig.toString.trim}{sigp.elems}</sig>
-                   <doc>{findDoc(_curmeth.getStartPosition)}</doc>{
+                   <sig>{sig.toString.trim}{sigp.elems}</sig>{findDoc(_curmeth.getStartPosition)}{
                      capture(super.visitMethod(node, _))
                    }</def>
         }
@@ -230,7 +228,7 @@ object Reader
         case _ => "default"
       }
 
-      val doc = if (_curmeth == null) findDoc(tree.getStartPosition) else ""
+      val doc = if (_curmeth == null) findDoc(tree.getStartPosition) else NodeSeq.Empty
       withId(_curid + "." + tree.name.toString) {
         // add a symtab mapping for this vardef
         if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
@@ -240,7 +238,7 @@ object Reader
         buf += <def name={tree.name.toString} id={_curid} kind="term" flavor={flavor}
                     access={access} start={start.toString} bodyStart={bodyStart.toString}
                     bodyEnd={tree.getEndPosition(_curunit.endPositions).toString}>
-                 <sig>{sig}{sigp.elems}</sig><doc>{doc}</doc>{
+                 <sig>{sig}{sigp.elems}</sig>{doc}{
                    if (hasFlag(tree.mods, Flags.ENUM)) NodeSeq.Empty
                    else capture(super.visitVariable(node, _))
                  }</def>
@@ -269,7 +267,8 @@ object Reader
       }
     }
 
-    private def targetForSym (name :Name, sym :Symbol) = sym match {
+    private def targetForSym (name :Name, sym :Symbol) :String = targetForSym(name.toString, sym)
+    private def targetForSym (name :String, sym :Symbol) :String = sym match {
       case cs :ClassSymbol => _types.erasure(cs.`type`).toString
       case ms :MethodSymbol => ms.owner + "." + ms.name + ms.`type`
       case vs :VarSymbol => vs.getKind match {
@@ -300,16 +299,16 @@ object Reader
       None
     }
 
-    private def findDoc (pos :Int) = {
+    private def findDoc (pos :Int) :NodeSeq = {
       val docEnd = _text.lastIndexOf("*/", pos)
-      if (docEnd == -1) ""
+      if (docEnd == -1) NodeSeq.Empty
       else {
         val docToDef = _text.substring(docEnd+2, pos)
-        if (docToDef.trim.length != 0) ""
+        if (docToDef.trim.length != 0) NodeSeq.Empty
         else {
           val commentStart = _text.lastIndexOf("/*", docEnd)
           val docStart = _text.lastIndexOf("/**", docEnd)
-          if (docStart != commentStart) ""
+          if (docStart != commentStart) NodeSeq.Empty
           else {
             val doc = trimDoc(_text.substring(docStart+3, docEnd))
             try {
@@ -318,7 +317,7 @@ object Reader
               case e => {
                 e.printStackTrace(System.out)
                 println(doc)
-                doc
+                <doc>doc</doc>
               }
             }
           }
@@ -331,30 +330,59 @@ object Reader
       text.split(_lineSeparator).map(_.trim).map(snipStar).filter(
         _.length != 0).mkString(_lineSeparator)
 
-    /** Performs some primitive post-processing of Javadocs. Presently: handles {at code} and
+    private def resolveLink (text :String) :(String, Option[Symbol]) = {
+      val hidx = text.indexOf("#")
+      if (hidx == -1) {
+        (text, None)
+      } else {
+        // TODO: we need to do a bunch of stuff for Javadoc symbol resolution
+        val (tname, mname) = (text.substring(0, hidx), text.substring(hidx+1))
+        (mname, Option(_curclass) flatMap(
+          cc => lookup(cc.sym.members, cc.name.table.fromString(mname))))
+      }
+    }
+
+    private def resolveValue (text :String) :(String, Option[Symbol]) = {
+      println("TODO resolveValue: " + text)
+      (text, None)
+    }
+
+    private def lookup (scope :Scope, name :Name) :Option[Symbol] = {
+      val e = scope.lookup(name)
+      if (e.scope == null) None
+      else Some(e.sym)
+    }
+
+      /** Performs some primitive post-processing of Javadocs. Presently: handles {at code} and
      * strips at tags (at param etc. will be handled later, and you can look at the full source for
      * at author, etc.). */
     private def processDoc (text :String) = {
       // first expand brace tag patterns
       val btm = _braceTagPat.matcher(text)
+      val uses = ArrayBuffer[Elem]()
       val sb = new StringBuffer
       while (btm.find) {
-        val escaped = escapeEntities(btm.group(2))
-        val (start, end) = btm.group(1) match {
-          case "code" => ("<code>", "</code>")
-          case "link" => ("<code><u>", "</u></code>") // TODO: magic
-          case "linkplain" => ("<u>", "</u>")         // TODO: same magic
-          case "value" => ("<code>", "</code>")       // TODO: yet more magic
-          case _ => ("", "") // link, etc?
+        val target = btm.group(2)
+        val (start, end, (tname, tsym)) = btm.group(1) match {
+          case "code" => ("<code>", "</code>", (target, None))
+          case "link" => ("<code>", "</code>", resolveLink(target))
+          case "linkplain" => ("", "", resolveLink(target))
+          case "value" => ("<code>", "</code>", resolveValue(target))
+          case _ => ("", "", (target, None)) // link, etc?
         }
-        btm.appendReplacement(sb, Matcher.quoteReplacement(start + escaped + end))
+        btm.appendReplacement(sb, Matcher.quoteReplacement(start))
+        tsym map(sym => {
+          uses += <use name={tname} target={targetForSym(tname, sym)}
+                       kind={kindForSym(sym)} start={sb.length.toString}/>
+        })
+        sb.append(Matcher.quoteReplacement(escapeEntities(tname) + end))
       }
       btm.appendTail(sb)
       val etext = sb.toString
 
       // now look for a block tags section and process it
       val tm = _tagPat.matcher(etext)
-      if (!tm.find) etext
+      if (!tm.find) <doc>{etext}{uses}</doc>
       else {
         val preText = etext.substring(0, tm.start).trim
         var tstart = tm.start
@@ -383,10 +411,10 @@ object Reader
              | "@version" => None
         }})
 
-        preText + (ttlist.flatten.mkString("\n") match {
+        <doc>{preText + (ttlist.flatten.mkString("\n") match {
           case "" => ""
           case text => "<dl>\n" + text + "</dl>"
-        })
+        })}{uses}</doc>
       }
     }
 
