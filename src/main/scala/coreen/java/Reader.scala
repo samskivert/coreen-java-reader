@@ -148,7 +148,7 @@ object Reader
 
       val ocount = _anoncount
       _anoncount = 0
-      withId(_curid + "." + clid) {
+      withId(_curid + " " + clid) {
         // we allow the name to be "" for anonymous classes so that they can be properly filtered
         // in the user interface; we eventually probably want to be more explicit about this
         buf += <def name={_curclass.name.toString} id={_curid} kind="type" flavor={flavor}
@@ -190,7 +190,7 @@ object Reader
           s => targetForSym(_curmeth.name, s)) getOrElse("")
 
         val methid = (if (_curmeth.`type` == null) "" else _curmeth.`type`).toString
-        withId(_curid + "." + name + methid) {
+        withId(_curid + " " + name + methid) {
           buf += <def name={name.toString} id={_curid} kind="func"
                       flavor={flavor} access={access} supers={supers}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
@@ -229,7 +229,7 @@ object Reader
       }
 
       val doc = if (_curmeth == null) findDoc(tree.getStartPosition) else NodeSeq.Empty
-      withId(_curid + "." + tree.name.toString) {
+      withId(_curid + " " + tree.name.toString) {
         // add a symtab mapping for this vardef
         if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
         val varend = tree.vartype.getEndPosition(_curunit.endPositions)
@@ -270,9 +270,9 @@ object Reader
     private def targetForSym (name :Name, sym :Symbol) :String = targetForSym(name.toString, sym)
     private def targetForSym (name :String, sym :Symbol) :String = sym match {
       case cs :ClassSymbol => _types.erasure(cs.`type`).toString
-      case ms :MethodSymbol => ms.owner + "." + ms.name + ms.`type`
+      case ms :MethodSymbol => ms.owner + " " + ms.name + ms.`type`
       case vs :VarSymbol => vs.getKind match {
-        case ElementKind.FIELD => vs.owner + "." + name
+        case ElementKind.FIELD => vs.owner + " " + name
         // ENUM_CONSTANT: TODO
         // EXCEPTION_PARAMETER, PARAMETER, LOCAL_VARIABLE (all in symtab)
         case _ => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
