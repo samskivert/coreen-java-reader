@@ -489,7 +489,7 @@ object Reader
   private def targetForTypeSym (sym :Symbol) :String = sym match {
     case null => "" // the "root" type's owner; nothing to see here, move it along
     case cs :ClassSymbol => joinDefIds(targetForTypeSym(sym.owner), sym.name.toString)
-    case ps :PackageSymbol => ps.toString // joinDefIds(targetForTypeSym(sym.owner), sym.name.toString)
+    case ps :PackageSymbol => ps.toString // keep the dots between packages
     case ts :TypeSymbol => sym.name.toString // this is a type parameter
     case _ => {
       println("Non-type in type sym? " + sym.getClass + " '" + sym + "'")
