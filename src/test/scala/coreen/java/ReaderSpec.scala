@@ -337,8 +337,8 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     // println(pretty(cunit))
     val supers = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@supers").text)) toMap;
     // println(supers)
-    supers("test Foo") should equal("java lang Object")
-    supers("test Foo A") should equal("java lang Runnable")
+    supers("test Foo") should equal("java.lang Object")
+    supers("test Foo A") should equal("java.lang Runnable")
   }
 
   val superMethodEx = """
@@ -355,9 +355,9 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     // println(pretty(cunit))
     val supers = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@supers").text)) toMap;
     // println(supers)
-    supers("test Foo run()void") should equal("java lang Runnable run()void")
+    supers("test Foo run()void") should equal("java.lang Runnable run()void")
     supers("test Foo toString()java.lang.String") should equal(
-      "java lang Object toString()java.lang.String")
+      "java.lang Object toString()java.lang.String")
   }
 
   val paramSuperEx = """
@@ -373,8 +373,8 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val cunit = Reader.process("Foo.java", paramSuperEx)
     val pkg = (cunit \ "def").head
     val supers = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@supers").text)) toMap;
-    supers("test Foo") should equal("java lang Object")
-    supers("test Foo A") should equal("java lang Comparable")
+    supers("test Foo") should equal("java.lang Object")
+    supers("test Foo A") should equal("java.lang Comparable")
   }
 
   val argAnnAnn = """

@@ -145,7 +145,7 @@ object Reader
         else if (t.isInterface) _types.interfaces(t).asScala
         else _types.interfaces(t).prepend(_types.supertype(t)).asScala
       val supers = getSupers(_curclass.`type`) map(
-        t => targetForTypeSym(_types.erasure(t).tsym)) mkString(" ")
+        t => targetForTypeSym(_types.erasure(t).tsym)) mkString(";")
 
       val ocount = _anoncount
       _anoncount = 0
@@ -489,7 +489,7 @@ object Reader
   private def targetForTypeSym (sym :Symbol) :String = sym match {
     case null => "" // the "root" type's owner; nothing to see here, move it along
     case cs :ClassSymbol => joinDefIds(targetForTypeSym(sym.owner), sym.name.toString)
-    case ps :PackageSymbol => joinDefIds(targetForTypeSym(sym.owner), sym.name.toString)
+    case ps :PackageSymbol => ps.toString // joinDefIds(targetForTypeSym(sym.owner), sym.name.toString)
     case ts :TypeSymbol => sym.name.toString // this is a type parameter
     case _ => {
       println("Non-type in type sym? " + sym.getClass + " '" + sym + "'")
