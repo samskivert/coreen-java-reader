@@ -247,8 +247,8 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val uses = pkg \\ "use"
     // println(cunit) // pretty(cunit))
     uses.length should equal(6)
-    (uses(0) \ "@target").text should equal("test.Foo.A")
-    (uses(1) \ "@target").text should equal("test.Foo.B")
+    (uses(0) \ "@target").text should equal("test Foo A")
+    (uses(1) \ "@target").text should equal("test Foo B")
   }
 
   val flavorEx = """
@@ -279,18 +279,18 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     // println(pretty(cunit))
     val flavs = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@flavor").text)) toMap;
     // println(flavs)
-    flavs("test.Foo") should equal("class")
-    flavs("test.Foo.A") should equal("interface")
-    flavs("test.Foo.A.interfaceMethod()void") should equal("abstract_method")
-    flavs("test.Foo.B") should equal("enum")
-    flavs("test.Foo.C") should equal("annotation")
-    flavs("test.Foo.D") should equal("abstract_class")
-    flavs("test.Foo.D.abstractMethod()void") should equal("abstract_method")
-    flavs("test.Foo.field") should equal("field")
-    flavs("test.Foo.Foo()void") should equal("constructor")
-    flavs("test.Foo.method(test.Foo.A)void") should equal("method")
-    flavs("test.Foo.method(test.Foo.A)void.param") should equal("param")
-    flavs("test.Foo.method(test.Foo.A)void.local") should equal("local")
+    flavs("test Foo") should equal("class")
+    flavs("test Foo A") should equal("interface")
+    flavs("test Foo A interfaceMethod()void") should equal("abstract_method")
+    flavs("test Foo B") should equal("enum")
+    flavs("test Foo C") should equal("annotation")
+    flavs("test Foo D") should equal("abstract_class")
+    flavs("test Foo D abstractMethod()void") should equal("abstract_method")
+    flavs("test Foo field") should equal("field")
+    flavs("test Foo Foo()void") should equal("constructor")
+    flavs("test Foo method(test.Foo.A)void") should equal("method")
+    flavs("test Foo method(test.Foo.A)void param") should equal("param")
+    flavs("test Foo method(test.Foo.A)void local") should equal("local")
   }
 
   val accessEx = """
@@ -313,13 +313,13 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     // println(pretty(cunit))
     val accs = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@access").text)) toMap;
     // println(accs)
-    accs("test.Foo") should equal("public")
-    accs("test.Foo.A") should equal("default")
-    accs("test.Foo.A.interfaceMethod()void") should equal("public")
-    accs("test.Foo.B") should equal("protected")
-    accs("test.Foo.B.method()void") should equal("protected")
-    accs("test.Foo.field") should equal("private")
-    accs("test.Foo.method()void") should equal("default")
+    accs("test Foo") should equal("public")
+    accs("test Foo A") should equal("default")
+    accs("test Foo A interfaceMethod()void") should equal("public")
+    accs("test Foo B") should equal("protected")
+    accs("test Foo B method()void") should equal("protected")
+    accs("test Foo field") should equal("private")
+    accs("test Foo method()void") should equal("default")
   }
 
   val superEx = """
@@ -337,8 +337,8 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     // println(pretty(cunit))
     val supers = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@supers").text)) toMap;
     // println(supers)
-    supers("test.Foo") should equal("java.lang.Object")
-    supers("test.Foo.A") should equal("java.lang.Runnable")
+    supers("test Foo") should equal("java lang Object")
+    supers("test Foo A") should equal("java lang Runnable")
   }
 
   val superMethodEx = """
@@ -355,9 +355,9 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     // println(pretty(cunit))
     val supers = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@supers").text)) toMap;
     // println(supers)
-    supers("test.Foo.run()void") should equal("java.lang.Runnable.run()void")
-    supers("test.Foo.toString()java.lang.String") should equal(
-      "java.lang.Object.toString()java.lang.String")
+    supers("test Foo run()void") should equal("java lang Runnable run()void")
+    supers("test Foo toString()java.lang.String") should equal(
+      "java lang Object toString()java.lang.String")
   }
 
   val paramSuperEx = """
@@ -373,8 +373,8 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val cunit = Reader.process("Foo.java", paramSuperEx)
     val pkg = (cunit \ "def").head
     val supers = (pkg \\ "def") map(e => ((e \ "@id").text -> (e \ "@supers").text)) toMap;
-    supers("test.Foo") should equal("java.lang.Object")
-    supers("test.Foo.A") should equal("java.lang.Comparable")
+    supers("test Foo") should equal("java lang Object")
+    supers("test Foo A") should equal("java lang Comparable")
   }
 
   val argAnnAnn = """

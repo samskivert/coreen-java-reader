@@ -144,11 +144,12 @@ object Reader
         if (t == null) Nil
         else if (t.isInterface) _types.interfaces(t).asScala
         else _types.interfaces(t).prepend(_types.supertype(t)).asScala
-      val supers = getSupers(_curclass.`type`) map(_types.erasure(_)) mkString(" ")
+      val supers = getSupers(_curclass.`type`) map(
+        t => targetForTypeSym(_types.erasure(t).tsym)) mkString(" ")
 
       val ocount = _anoncount
       _anoncount = 0
-      withId(_curid + " " + clid) {
+      withId(joinDefIds(_curid, clid)) {
         // we allow the name to be "" for anonymous classes so that they can be properly filtered
         // in the user interface; we eventually probably want to be more explicit about this
         buf += <def name={_curclass.name.toString} id={_curid} kind="type" flavor={flavor}
@@ -189,8 +190,8 @@ object Reader
         val supers = Option(_curmeth.sym) flatMap(findSuperMethod) map(
           s => targetForSym(_curmeth.name, s)) getOrElse("")
 
-        val methid = (if (_curmeth.`type` == null) "" else _curmeth.`type`).toString
-        withId(_curid + " " + name + methid) {
+        val methid = if (_curmeth.`type` == null) "" else _curmeth.`type`.toString
+        withId(joinDefIds(_curid, name + methid)) {
           buf += <def name={name.toString} id={_curid} kind="func"
                       flavor={flavor} access={access} supers={supers}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
@@ -229,7 +230,7 @@ object Reader
       }
 
       val doc = if (_curmeth == null) findDoc(tree.getStartPosition) else NodeSeq.Empty
-      withId(_curid + " " + tree.name.toString) {
+      withId(joinDefIds(_curid, tree.name.toString)) {
         // add a symtab mapping for this vardef
         if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
         val varend = tree.vartype.getEndPosition(_curunit.endPositions)
@@ -269,10 +270,11 @@ object Reader
 
     private def targetForSym (name :Name, sym :Symbol) :String = targetForSym(name.toString, sym)
     private def targetForSym (name :String, sym :Symbol) :String = sym match {
-      case cs :ClassSymbol => _types.erasure(cs.`type`).toString
-      case ms :MethodSymbol => ms.owner + " " + ms.name + ms.`type`
+      case cs :ClassSymbol => targetForTypeSym(sym)
+      case ms :MethodSymbol => joinDefIds(targetForSym("<error>", ms.owner),
+                                          "" + ms.name + ms.`type`)
       case vs :VarSymbol => vs.getKind match {
-        case ElementKind.FIELD => vs.owner + " " + name
+        case ElementKind.FIELD => joinDefIds(targetForSym("<error>", vs.owner), name)
         // ENUM_CONSTANT: TODO
         // EXCEPTION_PARAMETER, PARAMETER, LOCAL_VARIABLE (all in symtab)
         case _ => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
@@ -482,6 +484,24 @@ object Reader
     case _ => "unknown"
   }
 
+  // note the more general targetForSym in the tree traverser which can handle local names; this
+  // can only handle type names, which is fine for handling targets in docs and signatures
+  private def targetForTypeSym (sym :Symbol) :String = sym match {
+    case null => "" // the "root" type's owner; nothing to see here, move it along
+    case cs :ClassSymbol => joinDefIds(targetForTypeSym(sym.owner), sym.name.toString)
+    case ps :PackageSymbol => joinDefIds(targetForTypeSym(sym.owner), sym.name.toString)
+    case ts :TypeSymbol => sym.name.toString // this is a type parameter
+    case _ => {
+      println("Non-type in type sym? " + sym.getClass + " '" + sym + "'")
+      sym.name.toString
+    }
+  }
+
+  private def joinDefIds (first :String, second :String) = {
+    val sep = if (!first.isEmpty) " " else ""
+    first + sep + second
+  }
+
   private class SigPrinter (out :StringWriter, enclClassName :Name) extends Pretty(out, false) {
     // use nodes accumulated while printing a signature
     var elems = ArrayBuffer[Elem]()
@@ -585,7 +605,7 @@ object Reader
     override def visitIdent (tree :JCIdent) {
       if (tree.sym != null) {
         val target = tree.sym match {
-          case cs :ClassSymbol => _types.erasure(cs.`type`).toString
+          case cs :ClassSymbol => targetForTypeSym(cs)
           case _ => Console.println("TODO? " + tree + " " + tree.sym); tree.sym.toString
         }
         elems += <use name={tree.name.toString} target={target} kind={kindForSym(tree.sym)}
