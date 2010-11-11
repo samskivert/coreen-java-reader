@@ -141,11 +141,15 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
   }
   """
 
-  "Reader" should "correctly handle anonymous inner classes" in {
+  "Reader" should "not duplicate type use in anonymous inner classes" in {
     val cunit = Reader.process("Foo.java", anonEx)
     val pkg = (cunit \ "def").head
     val clazz = (pkg \ "def").head
     // println(pretty(cunit))
+    val useTargets = (clazz \\ "use" \\ "@target").map(_.text).toList
+    useTargets should equal(List("java.lang Object <init>()void", // super ctor use
+                                 "java.lang Object", "java.lang Object", // siguse and use
+                                 "java.lang Runnable", "java.lang Runnable")) // siguse and use
   }
 
   val docEx = """

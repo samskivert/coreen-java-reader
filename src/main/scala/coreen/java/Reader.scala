@@ -249,7 +249,7 @@ object Reader
     override def visitIdentifier (node :IdentifierTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCIdent]
       if (_curclass != null && // make sure we're not looking at an import
-          tree.sym != null) {
+          tree.sym != null && !inAnonExtendsOrImplements && !isSynthetic(tree.sym)) {
         val target = targetForSym(tree.name, tree.sym)
         buf += <use name={tree.name.toString} target={target} kind={kindForSym(tree.sym)}
                     start={tree.getStartPosition.toString}/>
@@ -267,6 +267,17 @@ object Reader
                     start={_text.indexOf(tree.name.toString, selend).toString}/>
       }
     }
+
+    /** Anonymous classes will emit a use for the supertype of the anonymous class in the block
+     * that constructs the class, however the AST is expanded to:
+     * {@code foo = new <empty> extends AnonSuper { ... } // or implements AnonSuper { ... }}
+     * which will result in a second use for the anonymous supertype, which we want to suppress. */
+    private def inAnonExtendsOrImplements = getCurrentPath.getParentPath.getLeaf match {
+      case cd :JCClassDecl => cd.name.toString == ""
+      case _ => false
+    }
+
+    private def isSynthetic (sym :Symbol) = (sym.flags & Flags.SYNTHETIC) != 0
 
     private def targetForSym (name :Name, sym :Symbol) :String = targetForSym(name.toString, sym)
     private def targetForSym (name :String, sym :Symbol) :String = sym match {
