@@ -249,7 +249,8 @@ object Reader
     override def visitIdentifier (node :IdentifierTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCIdent]
       if (_curclass != null && // make sure we're not looking at an import
-          tree.sym != null && !inAnonExtendsOrImplements && !isSynthetic(tree.sym)) {
+          tree.sym != null && !inAnonExtendsOrImplements &&
+          !hasFlag(tree.sym.flags, Flags.SYNTHETIC)) {
         val target = targetForSym(tree.name, tree.sym)
         buf += <use name={tree.name.toString} target={target} kind={kindForSym(tree.sym)}
                     start={tree.getStartPosition.toString}/>
@@ -276,8 +277,6 @@ object Reader
       case cd :JCClassDecl => cd.name.toString == ""
       case _ => false
     }
-
-    private def isSynthetic (sym :Symbol) = (sym.flags & Flags.SYNTHETIC) != 0
 
     private def targetForSym (name :Name, sym :Symbol) :String = targetForSym(name.toString, sym)
     private def targetForSym (name :String, sym :Symbol) :String = sym match {
