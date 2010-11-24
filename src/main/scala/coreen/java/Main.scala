@@ -5,6 +5,8 @@ package coreen.java
 
 import java.io.File
 import java.lang.System.out
+
+import scala.io.Source
 import scala.xml.PrettyPrinter
 
 /**
@@ -32,13 +34,29 @@ object Main
     val root = new File(args(0))
     val files = collectFiles(root, filter)
     val pp = new PrettyPrinter(999, 2)
+    val jars = locateJars(root, files.getOrElse("jar", List()))
     files get("java") match {
       case Some(javas) => {
         out.println("Compiling " + javas.size + " Java source files...")
-        Reader.process(javas, files getOrElse("jar", List())) foreach(e => out.println(e))
+        Reader.process(javas, jars) foreach(e => out.println(e))
       }
       case None => out.println("Found no .java files in " + root)
     }
+  }
+
+  def locateJars (root :File, defJars :Seq[File]) :Seq[File] = {
+    // if this looks like a Maven project, try getting the jars from Maven
+    val pom = new File(root, "pom.xml")
+    if (pom.exists) {
+      try {
+        val p = Runtime.getRuntime.exec(Array("mvn", "dependency:build-classpath"), null, root)
+        val output = Source.fromInputStream(p.getInputStream).getLines
+        val cpath = output.find(!_.startsWith("[")).map(_.split(File.pathSeparator).toSeq)
+        cpath.map(_.map(new File(_))).getOrElse(defJars)
+      } catch {
+        case e => out.println("Failure resolving Maven classpath " + e); defJars
+      }
+    } else defJars
   }
 
   def collectFiles (file :File, filter :(String => Boolean)) :Map[String,List[File]] = {
