@@ -424,5 +424,29 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     (bif \ "sig").text should equal ("BIF")
   }
 
+  val selectUseEx = """
+  package test;
+  public class Foo {
+    public class A {
+      public void foo (String arg) {}
+    }
+    public class B extends A {
+      public void foo (String arg) {
+        super.foo(arg);
+      }
+    }
+  }
+  """
+
+  "Reader" should "correctly handle selected names" in {
+    val cunit = Reader.process("Foo.java", selectUseEx)
+    // println(pretty(cunit))
+    val pkg = (cunit \ "def").head
+    val uses = pkg \\ "use"
+    // println(uses.mkString("\n"))
+    // make sure the "foo" in super.foo is at the right position
+    (uses(9) \ "@start").text should equal("185")
+  }
+
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)
 }

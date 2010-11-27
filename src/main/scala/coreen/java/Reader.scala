@@ -263,7 +263,8 @@ object Reader
       if (_curclass != null && // make sure we're not looking at an import
           tree.sym != null) {
         val target = targetForSym(tree.name, tree.sym)
-        val selend = tree.selected.getEndPosition(_curunit.endPositions)
+        // TODO: is there a better way to get the start position of the selected name?
+        val selend = tree.getStartPosition + tree.selected.toString.length
         buf += <use name={tree.name.toString} target={target} kind={kindForSym(tree.sym)}
                     start={_text.indexOf(tree.name.toString, selend).toString}/>
       }
