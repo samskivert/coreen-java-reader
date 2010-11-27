@@ -3,7 +3,7 @@
 
 package coreen.java
 
-import scala.xml.{Elem, PrettyPrinter}
+import scala.xml.{Elem, NodeSeq, PrettyPrinter}
 
 import org.scalatest.FlatSpec
 import org.scalatest.matchers.ShouldMatchers
@@ -448,23 +448,34 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     (uses(9) \ "@start").text should equal("185")
   }
 
-  val prunedAnnotationEx = """
+  val sigDefPosEx = """
   package test;
   public class Foo implements Runnable {
     @Override public void run () {}
   }
   """
 
-  "Reader" should "not properly align defs and uses" in {
-    val cunit = Reader.process("Foo.java", prunedAnnotationEx)
+  "Reader" should "properly align defs and uses" in {
+    val cunit = Reader.process("Foo.java", sigDefPosEx)
     val pkg = (cunit \ "def").head
-    // println(pretty(cunit))
+    // println(cunit)
+
+    // first check the main defs and uses
     val defs = (pkg \\ "def")
+    checkNames(sigDefPosEx, defs)
     val uses = defs flatMap(d => d \ "use") // avoid picking up siguses
-    val defnames = defs map(d => ((d \ "@name").text, (d \ "@start").text.toInt))
-    val usenames = uses map(u => ((u \ "@name").text, (u \ "@start").text.toInt))
-    for ((name, start) <- (defnames ++ usenames)) {
-      prunedAnnotationEx.substring(start, start+name.length) should equal(name)
+    checkNames(sigDefPosEx, uses);
+
+    // now check the sig defs and uses
+    for (sig <- (pkg \\ "sig")) {
+      checkNames(sig.text, sig \\ "sigdef")
+      checkNames(sig.text, sig \\ "use")
+    }
+  }
+
+  protected def checkNames (text :String, elems :NodeSeq) {
+    for ((name, start) <- elems map(e => ((e \ "@name").text, (e \ "@start").text.toInt))) {
+      text.substring(start, start+name.length) should equal(name)
     }
   }
 
