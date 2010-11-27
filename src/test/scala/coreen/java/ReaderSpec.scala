@@ -448,5 +448,25 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     (uses(9) \ "@start").text should equal("185")
   }
 
+  val prunedAnnotationEx = """
+  package test;
+  public class Foo implements Runnable {
+    @Override public void run () {}
+  }
+  """
+
+  "Reader" should "not properly align defs and uses" in {
+    val cunit = Reader.process("Foo.java", prunedAnnotationEx)
+    val pkg = (cunit \ "def").head
+    // println(pretty(cunit))
+    val defs = (pkg \\ "def")
+    val uses = defs flatMap(d => d \ "use") // avoid picking up siguses
+    val defnames = defs map(d => ((d \ "@name").text, (d \ "@start").text.toInt))
+    val usenames = uses map(u => ((u \ "@name").text, (u \ "@start").text.toInt))
+    for ((name, start) <- (defnames ++ usenames)) {
+      prunedAnnotationEx.substring(start, start+name.length) should equal(name)
+    }
+  }
+
   protected def pretty (cunit :Elem) = new PrettyPrinter(999, 2).format(cunit)
 }

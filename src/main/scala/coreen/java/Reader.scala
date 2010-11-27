@@ -147,6 +147,9 @@ object Reader
       val supers = getSupers(_curclass.`type`) map(
         t => targetForTypeSym(_types.erasure(t).tsym)) mkString(";")
 
+      // TODO: improve approach to finding position of class name
+      val start = _text.indexOf(cname, _curclass.getStartPosition)
+
       val ocount = _anoncount
       _anoncount = 0
       withId(joinDefIds(_curid, clid)) {
@@ -154,8 +157,7 @@ object Reader
         // in the user interface; we eventually probably want to be more explicit about this
         buf += <def name={_curclass.name.toString} id={_curid} kind="type" flavor={flavor}
                     access={flagsToAccess(_curclass.mods.flags)} supers={supers}
-                    start={_text.lastIndexOf(cname, _curclass.getStartPosition).toString}
-                    bodyStart={_curclass.getStartPosition.toString}
+                    start={start.toString} bodyStart={_curclass.getStartPosition.toString}
                     bodyEnd={_curclass.getEndPosition(_curunit.endPositions).toString}>
                  <sig>{sigw.toString}{sigp.elems}</sig>{findDoc(_curclass.getStartPosition)}{
                    capture(super.visitClass(node, _))
@@ -522,8 +524,10 @@ object Reader
     override def printAnnotations (trees :JCList[JCAnnotation]) {
       var l = trees
       while (l.nonEmpty) {
+        val olen = out.getBuffer.length
         printStat(l.head)
-        print(" ")
+        // if the annotation wasn't ommitted, add a space after it
+        if (out.getBuffer.length > olen) print(" ")
         l = l.tail
       }
     }
