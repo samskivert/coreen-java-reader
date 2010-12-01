@@ -442,14 +442,16 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
   }
   """
 
-  "Reader" should "correctly handle selected names" in {
+  "Reader" should "correctly handle selected names" taggedAs(TheOne) in {
     val cunit = Reader.process("Foo.java", selectUseEx)
     // println(pretty(cunit))
     val pkg = (cunit \ "def").head
-    val uses = pkg \\ "use"
-    // println(uses.mkString("\n"))
+    val foo = (pkg \ "def").head
+    val b = (foo \ "def")(1)
+    val buses = (b \ "def")(0) \ "use"
+    // println(buses.mkString("\n"))
     // make sure the "foo" in super.foo is at the right position
-    (uses(9) \ "@start").text should equal("185")
+    (buses(0) \ "@start").text should equal("185")
   }
 
   val sigDefPosEx = """

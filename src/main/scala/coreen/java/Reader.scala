@@ -252,7 +252,7 @@ object Reader
       val tree = node.asInstanceOf[JCIdent]
       if (_curclass != null && // make sure we're not looking at an import
           tree.sym != null && !inAnonExtendsOrImplements &&
-          !hasFlag(tree.sym.flags, Flags.SYNTHETIC))
+          !hasFlag(tree.sym.flags, Flags.SYNTHETIC) && !isSynthSuper(tree))
       {
         // if this identifier is part of a "new C" expression, we want to climb up the AST and get
         // the constructor from our parent tree node
@@ -280,10 +280,6 @@ object Reader
       }
     }
 
-    private def toString (path :TreePath) :String =
-      (if (path.getParentPath == null) ""
-       else toString(path.getParentPath) + ".") + path.getLeaf.getKind
-
     override def visitMemberSelect (node :MemberSelectTree, buf :ArrayBuffer[Elem]) {
       super.visitMemberSelect(node, buf)
       val tree = node.asInstanceOf[JCFieldAccess]
@@ -305,6 +301,21 @@ object Reader
       case cd :JCClassDecl => cd.name.toString == ""
       case _ => false
     }
+
+    // the only way to identify a synthesized super() seems to be to check that its source position
+    // is the same as the enclosing block, javac helpfully fails to add a SYNTHETIC flag
+    private def isSynthSuper (tree :JCIdent) =
+      (tree.name == tree.name.table._super &&
+       tree.getStartPosition != enclosingBlock(getCurrentPath).getStartPosition)
+
+    private def enclosingBlock (path :TreePath) :JCBlock = path.getLeaf match {
+      case tree :JCBlock => tree
+      case _ => enclosingBlock(path.getParentPath)
+    }
+
+    private def pathToString (path :TreePath) :String =
+      (if (path.getParentPath == null) ""
+       else toString(path.getParentPath) + ".") + path.getLeaf.getKind
 
     private def targetForSym (name :Name, sym :Symbol) :String = targetForSym(name.toString, sym)
     private def targetForSym (name :String, sym :Symbol) :String = sym match {
