@@ -5,7 +5,7 @@ package coreen.java
 
 import scala.xml.{Elem, NodeSeq, PrettyPrinter}
 
-import org.scalatest.FlatSpec
+import org.scalatest.{FlatSpec, Tag}
 import org.scalatest.matchers.ShouldMatchers
 
 /**
@@ -13,6 +13,10 @@ import org.scalatest.matchers.ShouldMatchers
  */
 class ReaderSpec extends FlatSpec with ShouldMatchers
 {
+  // used to run a single spec, add: should "..." taggedAs(TheOne) in {
+  // and then run: test-only coreen.java.ReaderSpec -- -n theone
+  object TheOne extends Tag("theone")
+
   val testA = """
     package foo.bar;
     public class TestA {
@@ -147,7 +151,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val clazz = (pkg \ "def").head
     // println(pretty(cunit))
     val useTargets = (clazz \\ "use" \\ "@target").map(_.text).toList
-    useTargets should equal(List("java.lang Object <init>()void", // super ctor use
+    useTargets should equal(List("java.lang Object Object()void", // super ctor use
                                  "java.lang Object", "java.lang Object", // siguse and use
                                  "java.lang Runnable", "java.lang Runnable")) // siguse and use
   }
@@ -470,6 +474,38 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     for (sig <- (pkg \\ "sig")) {
       checkNames(sig.text, sig \\ "sigdef")
       checkNames(sig.text, sig \\ "use")
+    }
+  }
+
+  val ctorEx = """
+  package test;
+  public class Foo {
+    public static Foo newFoo () {
+      return new Foo();
+    }
+    public Foo () {
+      Object foo = new Runnable() {
+        public void run () {}
+      };
+    }
+  }
+  """
+
+  "Reader" should "compute proper referents for constructors" in {
+    val cunit = Reader.process("Foo.java", ctorEx)
+    val pkg = (cunit \ "def").head
+    val clazz = (pkg \ "def").head
+    // println(pretty(cunit))
+    val useTargets = (clazz \\ "use" \\ "@target").map(_.text).toList
+    // println(useTargets.mkString("\n"))
+    useTargets zip List("test Foo", // siguse of Foo in newFoo()
+                        "test Foo", // use of Foo in newFoo() return type
+                        "test Foo Foo()void", // use: new _Foo()_ in newFoo
+                        "java.lang Object Object()void", // use of _super()_ in Foo()
+                        "java.lang Object", "java.lang Object", // siguse and use
+                        "java.lang Runnable", // use (new _Runnable_())
+                        "java.lang Runnable") foreach { // siguse (Foo$1 implements _Runnable_)
+      case (a, b) => a should equal(b)
     }
   }
 

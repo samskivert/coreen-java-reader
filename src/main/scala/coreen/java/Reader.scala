@@ -13,7 +13,7 @@ import javax.tools.SimpleJavaFileObject
 import javax.tools.ToolProvider
 
 import com.sun.source.tree._
-import com.sun.source.util.{JavacTask, TreePathScanner}
+import com.sun.source.util.{JavacTask, TreePath, TreePathScanner}
 import com.sun.tools.javac.code.{Flags, Scope, Symbol, Type, Types, TypeTags}
 import com.sun.tools.javac.code.Symbol._
 import com.sun.tools.javac.tree.JCTree._
@@ -252,12 +252,37 @@ object Reader
       val tree = node.asInstanceOf[JCIdent]
       if (_curclass != null && // make sure we're not looking at an import
           tree.sym != null && !inAnonExtendsOrImplements &&
-          !hasFlag(tree.sym.flags, Flags.SYNTHETIC)) {
-        val target = targetForSym(tree.name, tree.sym)
+          !hasFlag(tree.sym.flags, Flags.SYNTHETIC))
+      {
+        // if this identifier is part of a "new C" expression, we want to climb up the AST and get
+        // the constructor from our parent tree node
+        val pnode = getCurrentPath.getParentPath.getLeaf
+        val tsym = pnode.getKind match {
+          case Tree.Kind.NEW_CLASS => {
+            val csym = pnode.asInstanceOf[JCNewClass].constructor
+            // if the ctor type could not be resolved, bail early
+            if (csym == null) tree.sym
+            // if this is an anonymous class constructor...
+            else if (csym.owner.name == csym.owner.name.table.empty) {
+              // TODO: if the parent type is an interface, there will be no constructor (and it
+              // would be weird to link to the zero-argument Object constructor), but if the type
+              // is a class, it would be nice to link to the appropriate constructor
+              // val ptype = _types.supertype(csym.owner.`type`)
+              // TODO: if supertype is not Object, find and use super ctor
+              tree.sym // for now, target the type itself
+            } else csym
+          }
+          case _ => tree.sym
+        }
+        val target = targetForSym(tree.name, tsym)
         buf += <use name={tree.name.toString} target={target} kind={kindForSym(tree.sym)}
                     start={tree.getStartPosition.toString}/>
       }
     }
+
+    private def toString (path :TreePath) :String =
+      (if (path.getParentPath == null) ""
+       else toString(path.getParentPath) + ".") + path.getLeaf.getKind
 
     override def visitMemberSelect (node :MemberSelectTree, buf :ArrayBuffer[Elem]) {
       super.visitMemberSelect(node, buf)
@@ -283,19 +308,13 @@ object Reader
 
     private def targetForSym (name :Name, sym :Symbol) :String = targetForSym(name.toString, sym)
     private def targetForSym (name :String, sym :Symbol) :String = sym match {
-      case cs :ClassSymbol => targetForTypeSym(sym)
-      case ms :MethodSymbol => joinDefIds(targetForSym("<error>", ms.owner),
-                                          "" + ms.name + ms.`type`)
       case vs :VarSymbol => vs.getKind match {
         case ElementKind.FIELD => joinDefIds(targetForSym("<error>", vs.owner), name)
         // ENUM_CONSTANT: TODO
         // EXCEPTION_PARAMETER, PARAMETER, LOCAL_VARIABLE (all in symtab)
         case _ => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
       }
-      case _ => {
-        // println("TODOOZ " + name + " " + sym.getClass)
-        sym.toString // TODO
-      }
+      case _ => targetForTypeSym(sym)
     }
 
     // TODO: strictly speaking this should find all interface methods but it currently stops at the
@@ -504,8 +523,12 @@ object Reader
     case cs :ClassSymbol => joinDefIds(targetForTypeSym(sym.owner), sym.name.toString)
     case ps :PackageSymbol => ps.toString // keep the dots between packages
     case ts :TypeSymbol => sym.name.toString // this is a type parameter
+    case ms :MethodSymbol => {
+      val mname = if (ms.name == ms.name.table.init) ms.owner.name else ms.name
+      joinDefIds(targetForTypeSym(ms.owner), "" + mname + ms.`type`)
+    }
     case _ => {
-      println("Non-type in type sym? " + sym.getClass + " '" + sym + "'")
+      Console.println("Unhandled type sym " + sym.getClass + " '" + sym + "'")
       sym.name.toString
     }
   }
