@@ -118,17 +118,6 @@ object Reader
       val isAnon = _curclass.name.toString == ""
       val clid = _curclass.name + (if (isAnon) "$" + nextanon() else "")
 
-      // name in anon classes is "", but for signature generation we want to replace it with the
-      // name that will be later assigned by the compiler EnclosingClass$N
-      val sigw = new StringWriter
-      val sigp = new SigPrinter(sigw, _curclass.name.table.fromString(clid)) {
-        override def printAnnotations (trees :JCList[JCAnnotation]) {
-          super.printAnnotations(trees)
-          if (!trees.isEmpty) println
-        }
-      }
-      sigp.printExpr(_curclass)
-
       val cname = if (isAnon) {
         if (_curclass.extending != null) _curclass.extending.toString
         else _curclass.implementing.toString
@@ -153,6 +142,17 @@ object Reader
       val ocount = _anoncount
       _anoncount = 0
       withId(joinDefIds(_curid, clid)) {
+        // name in anon classes is "", but for signature generation we want to replace it with the
+        // name that will be later assigned by the compiler EnclosingClass$N
+        val sigw = new StringWriter
+        val sigp = new SigPrinter(sigw, _curid, _curclass.name.table.fromString(clid)) {
+          override def printAnnotations (trees :JCList[JCAnnotation]) {
+            super.printAnnotations(trees)
+            if (!trees.isEmpty) println
+          }
+        }
+        sigp.printExpr(_curclass)
+
         // we allow the name to be "" for anonymous classes so that they can be properly filtered
         // in the user interface; we eventually probably want to be more explicit about this
         buf += <def name={_curclass.name.toString} id={_curid} kind="type" flavor={flavor}
@@ -185,15 +185,16 @@ object Reader
                      else flagsToAccess(_curmeth.mods.flags)
 
         val name = if (isCtor) _curclass.name else _curmeth.name
-        val sig = new StringWriter
-        val sigp = new SigPrinter(sig, _curclass.name)
-        sigp.printExpr(_curmeth)
 
         val supers = Option(_curmeth.sym) flatMap(findSuperMethod) map(
           s => targetForSym(_curmeth.name, s)) getOrElse("")
 
         val methid = if (_curmeth.`type` == null) "" else _curmeth.`type`.toString
         withId(joinDefIds(_curid, name + methid)) {
+          val sig = new StringWriter
+          val sigp = new SigPrinter(sig, _curid, _curclass.name)
+          sigp.printExpr(_curmeth)
+
           buf += <def name={name.toString} id={_curid} kind="func"
                       flavor={flavor} access={access} supers={supers}
                       start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
@@ -213,14 +214,6 @@ object Reader
 
     override def visitVariable (node :VariableTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCVariableDecl]
-
-      val sigw = new StringWriter
-      val sigp = new SigPrinter(sigw, _curclass.name)
-      sigp.printExpr(tree)
-
-      // filter out the wacky crap Pretty puts in for enums
-      val sig = sigw.toString.trim.replace("/*public static final*/ ", "")
-
       val flavor = if (_curmeth == null) {
                    if (hasFlag(tree.mods, Flags.STATIC)) "static_field"
                    else "field"
@@ -235,6 +228,13 @@ object Reader
       withId(joinDefIds(_curid, tree.name.toString)) {
         // add a symtab mapping for this vardef
         if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
+
+        val sigw = new StringWriter
+        val sigp = new SigPrinter(sigw, _curid, _curclass.name)
+        sigp.printExpr(tree)
+        // filter out the wacky crap Pretty puts in for enums
+        val sig = sigw.toString.trim.replace("/*public static final*/ ", "")
+
         val varend = tree.vartype.getEndPosition(_curunit.endPositions)
         val start = _text.indexOf(tree.name.toString, varend)
         val bodyStart = if (tree.getStartPosition == -1) start else tree.getStartPosition
@@ -549,9 +549,12 @@ object Reader
     first + sep + second
   }
 
-  private class SigPrinter (out :StringWriter, enclClassName :Name) extends Pretty(out, false) {
+  private class SigPrinter (
+    out :StringWriter, id :String, enclClassName :Name
+  ) extends Pretty(out, false) {
     // use nodes accumulated while printing a signature
     var elems = ArrayBuffer[Elem]()
+    private var _nested = false
 
     override def printBlock (stats :JCList[_ <: JCTree]) { /* noop! */ }
     override def printEnumBody (stats :JCList[JCTree]) { /* noop! */ }
@@ -594,7 +597,7 @@ object Reader
           printExprs(tree.implementing)
         }
       }
-      elems += <sigdef name={enclClassName.toString} kind="type" start={cpos.toString}/>
+      elems += <sigdef id={id} name={enclClassName.toString} kind="type" start={cpos.toString}/>
     }
 
     override def visitMethodDef (tree :JCMethodDecl) {
@@ -602,6 +605,7 @@ object Reader
       if (tree.name != tree.name.table.init || enclClassName != null) {
         var mname = ""
         var mpos = 0
+        _nested = true
         printExpr(tree.mods)
         printTypeParameters(tree.typarams)
         if (tree.name == tree.name.table.init) {
@@ -625,7 +629,8 @@ object Reader
           print(" default ")
           printExpr(tree.defaultValue)
         }
-        elems += <sigdef name={mname} kind="func" start={mpos.toString}/>
+        _nested = false
+        elems += <sigdef id={id} name={mname} kind="func" start={mpos.toString}/>
       }
     }
 
@@ -648,7 +653,11 @@ object Reader
       super.visitVarDef(tree)
       tree.init = oinit
       val vpos = out.getBuffer.length-tree.name.toString.length
-      elems += <sigdef name={tree.name.toString} kind="term" start={vpos.toString}/>
+      // we're either printing the sig for a plain old vardef, or we're nested, in which case we're
+      // printing the signature for a method, but it has parameters, and 'id' is the method id, so
+      // we need to append the var name to get the var def id
+      val vid = if (_nested) joinDefIds(id, tree.name.toString) else id
+      elems += <sigdef id={vid} name={tree.name.toString} kind="term" start={vpos.toString}/>
     }
 
     override def visitIdent (tree :JCIdent) {

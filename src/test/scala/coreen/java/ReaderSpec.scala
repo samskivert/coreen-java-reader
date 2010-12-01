@@ -442,7 +442,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
   }
   """
 
-  "Reader" should "correctly handle selected names" taggedAs(TheOne) in {
+  "Reader" should "correctly handle selected names" in {
     val cunit = Reader.process("Foo.java", selectUseEx)
     // println(pretty(cunit))
     val pkg = (cunit \ "def").head
@@ -458,13 +458,15 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
   package test;
   public class Foo implements Runnable {
     @Override public void run () {}
+    public void foo (int bar) {}
+    public int baz = 3;
   }
   """
 
-  "Reader" should "properly align defs and uses" in {
+  "Reader" should "properly align defs and uses" taggedAs(TheOne) in {
     val cunit = Reader.process("Foo.java", sigDefPosEx)
     val pkg = (cunit \ "def").head
-    // println(cunit)
+    // println(pretty(cunit))
 
     // first check the main defs and uses
     val defs = (pkg \\ "def")
@@ -476,6 +478,18 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     for (sig <- (pkg \\ "sig")) {
       checkNames(sig.text, sig \\ "sigdef")
       checkNames(sig.text, sig \\ "use")
+    }
+
+    // make sure the sigdefs have correct ids
+    val sigdefs = (defs \ "sig" \ "sigdef" \\ "@id" map(_.text)).toList
+    // println(sigdefs.mkString("\n"))
+    sigdefs zip List("test Foo",
+                     "test Foo run()void",
+                     "test Foo foo(int)void bar",
+                     "test Foo foo(int)void",
+                     "test Foo foo(int)void bar",
+                     "test Foo baz") foreach {
+      case (a, b) => a should equal(b)
     }
   }
 
