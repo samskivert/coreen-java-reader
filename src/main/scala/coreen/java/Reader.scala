@@ -315,7 +315,7 @@ object Reader
 
     private def pathToString (path :TreePath) :String =
       (if (path.getParentPath == null) ""
-       else toString(path.getParentPath) + ".") + path.getLeaf.getKind
+       else pathToString(path.getParentPath) + ".") + path.getLeaf.getKind
 
     private def targetForSym (name :Name, sym :Symbol) :String = targetForSym(name.toString, sym)
     private def targetForSym (name :String, sym :Symbol) :String = sym match {
