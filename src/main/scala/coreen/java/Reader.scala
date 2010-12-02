@@ -305,13 +305,14 @@ object Reader
     // the only way to identify a synthesized super() seems to be to check that its source position
     // is the same as the enclosing block, javac helpfully fails to add a SYNTHETIC flag
     private def isSynthSuper (tree :JCIdent) =
-      (tree.name == tree.name.table._super &&
-       tree.getStartPosition != enclosingBlock(getCurrentPath).getStartPosition)
+      (tree.name == tree.name.table._super && enclosingBlock(getCurrentPath).map(
+        tree.getStartPosition != _.getStartPosition).getOrElse(false))
 
-    private def enclosingBlock (path :TreePath) :JCBlock = path.getLeaf match {
-      case tree :JCBlock => tree
-      case _ => enclosingBlock(path.getParentPath)
-    }
+    private def enclosingBlock (path :TreePath) :Option[JCBlock] =
+      Option(path) flatMap(_.getLeaf match {
+        case tree :JCBlock => Some(tree)
+        case _ => enclosingBlock(path.getParentPath)
+      })
 
     private def pathToString (path :TreePath) :String =
       (if (path.getParentPath == null) ""
