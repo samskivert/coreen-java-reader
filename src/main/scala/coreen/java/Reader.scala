@@ -663,22 +663,24 @@ object Reader
         var mname = ""
         var mpos = 0
         _nested = true
-        printExpr(tree.mods)
+        // TEMP: try life without modifiers
+        // printExpr(tree.mods)
         // type parameters are now extracted into separate defs
         // printTypeParameters(tree.typarams)
+        mpos = out.getBuffer.length
         if (tree.name == tree.name.table.init) {
-          mpos = out.getBuffer.length
           mname = enclClassName.toString
-          print(enclClassName)
         } else {
-          printExpr(tree.restype)
-          mpos = out.getBuffer.length+1
           mname = tree.name.toString
-          print(" " + tree.name)
         }
+        print(mname)
         print("(")
         printExprs(tree.params)
         print(")")
+        if (tree.name != tree.name.table.init) {
+          print(" :")
+          printExpr(tree.restype)
+        }
         // omit throws from signatures
         // if (tree.thrown.nonEmpty()) {
         //   print("\n  throws ")
@@ -718,11 +720,18 @@ object Reader
     }
 
     override def visitVarDef (tree :JCVariableDecl) {
-      val oinit = tree.init
-      tree.init = null
-      super.visitVarDef(tree)
-      tree.init = oinit
-      val vpos = out.getBuffer.length-tree.name.toString.length
+      var vpos = 0
+      if (_nested) {
+        val oinit = tree.init
+        tree.init = null
+        super.visitVarDef(tree)
+        tree.init = oinit
+        vpos = out.getBuffer.length-tree.name.toString.length
+      } else {
+        vpos = out.getBuffer.length
+        print(tree.name + " :");
+        printExpr(tree.vartype);
+      }
       // we're either printing the sig for a plain old vardef, or we're nested, in which case we're
       // printing the signature for a method, but it has parameters, and 'id' is the method id, so
       // we need to append the var name to get the var def id
