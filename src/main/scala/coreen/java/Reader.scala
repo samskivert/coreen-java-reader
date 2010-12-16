@@ -696,14 +696,12 @@ object Reader
     override def visitTypeParameter (tree :JCTypeParameter) {
       super.visitTypeParameter(tree);
 
-      // if we're generating the signature for a class, go ahead and emit sigdefs for our type
-      // parameters, but if we're generating the signature for a type parameter def, we don't want
-      // to repeat the type parameter itself as a sigdef
-      if (enclClassName != null) {
-        val tid = joinDefIds(id, tree.name.toString)
-        val tpos = out.getBuffer.length-tree.name.toString.length
-        elems += <sigdef id={tid} name={tree.name.toString} kind="type" start={tpos.toString}/>
-      }
+      // if we're generating the signature for a class, we need to append the type param name to
+      // the class id to get our id, if we're generating the signature for a type param directly,
+      // our id is already our id
+      val tid = if (enclClassName != null) joinDefIds(id, tree.name.toString) else id
+      val tpos = out.getBuffer.length-tree.name.toString.length
+      elems += <sigdef id={tid} name={tree.name.toString} kind="type" start={tpos.toString}/>
     }
 
     override def visitAnnotation (tree :JCAnnotation) {

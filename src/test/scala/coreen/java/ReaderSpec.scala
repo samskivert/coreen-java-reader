@@ -249,7 +249,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
   }
   """
 
-  "Reader" should "correctly handle parameterized uses" in {
+  "Reader" should "correctly handle parameterized uses" taggedAs(TheOne) in {
     val cunit = Reader.process("Foo.java", paramTypeEx)
     val pkg = (cunit \ "def").head
     val uses = pkg \\ "use"
@@ -296,7 +296,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
   }
   """
 
-  "Reader" should "extract param documentation" taggedAs(TheOne) in {
+  "Reader" should "extract param documentation" in {
     val cunit = Reader.process("Foo.java", paramDocEx)
     // println(pretty(cunit))
     val pkg = (cunit \ "def").head
