@@ -253,10 +253,34 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val cunit = Reader.process("Foo.java", paramTypeEx)
     val pkg = (cunit \ "def").head
     val uses = pkg \\ "use"
-    // println(cunit) // pretty(cunit))
+    println(pretty(cunit))
     uses.length should equal(6)
     (uses(0) \ "@target").text should equal("test Foo A")
     (uses(1) \ "@target").text should equal("test Foo B")
+  }
+
+  val methParamTypeEx = """
+  package test;
+  public class Foo {
+    public <T extends Number> int toInt (T value) {
+      return value.intValue();
+    }
+  }
+  """
+
+  "Reader" should "correctly handle method type parameters" taggedAs(TheOne) in {
+    val cunit = Reader.process("Foo.java", methParamTypeEx)
+    // println(pretty(cunit))
+    val pkg = (cunit \ "def").head
+    val sigs = pkg \\ "sig" map(_.text)
+    // println(sigs)
+    sigs zip List("test",
+                  "public class Foo",
+                  "public int toInt(T value)",
+                  "T extends Number",
+                  "T value") foreach {
+      case (a, b) => a should equal(b)
+    }
   }
 
   val flavorEx = """
@@ -463,7 +487,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
   }
   """
 
-  "Reader" should "properly align defs and uses" taggedAs(TheOne) in {
+  "Reader" should "properly align defs and uses" in {
     val cunit = Reader.process("Foo.java", sigDefPosEx)
     val pkg = (cunit \ "def").head
     // println(pretty(cunit))

@@ -208,6 +208,22 @@ object Reader
       _curmeth = ometh
     }
 
+    override def visitTypeParameter (node :TypeParameterTree, buf :ArrayBuffer[Elem]) {
+      val tree = node.asInstanceOf[JCTypeParameter]
+
+      withId(joinDefIds(_curid, node.getName.toString)) {
+        val sig = new StringWriter
+        val sigp = new SigPrinter(sig, _curid, null)
+        sigp.printExpr(tree)
+
+        buf += <def name={node.getName.toString} id={_curid} kind="term"
+                    flavor="type_param" access="public" start={tree.getStartPosition.toString}>
+                 <sig>{sig.toString}{sigp.elems}</sig>{
+                   capture(super.visitTypeParameter(node, _))
+                 }</def>
+      }
+    }
+
     override def visitBlock (node :BlockTree, buf :ArrayBuffer[Elem]) {
       withScope(super.visitBlock(node, buf))
     }
@@ -504,7 +520,7 @@ object Reader
       _symtab = _symtab.tail
     }
 
-    private def capture (call :ArrayBuffer[Elem] => Unit) = {
+    private def capture (call :ArrayBuffer[Elem] => Unit) :Seq[Elem] = {
       val sbuf = ArrayBuffer[Elem]()
       call(sbuf)
       sbuf
@@ -524,6 +540,7 @@ object Reader
   private def kindForSym (sym :Symbol) = sym match {
     case cs :ClassSymbol => "type"
     case ms :MethodSymbol => "func"
+    case ts :TypeSymbol => "term" // we treat type parameters as 'type-level terms'
     case vs :VarSymbol => "term"
     case _ => "unknown"
   }
@@ -534,7 +551,7 @@ object Reader
     case null => "" // the "root" type's owner; nothing to see here, move it along
     case cs :ClassSymbol => joinDefIds(targetForTypeSym(sym.owner), sym.name.toString)
     case ps :PackageSymbol => ps.toString // keep the dots between packages
-    case ts :TypeSymbol => sym.name.toString // this is a type parameter
+    case ts :TypeSymbol => joinDefIds(targetForTypeSym(ts.owner), ""+sym.name) // type param
     case ms :MethodSymbol => {
       val mname = if (ms.name == ms.name.table.init) ms.owner.name else ms.name
       joinDefIds(targetForTypeSym(ms.owner), "" + mname + ms.`type`)
@@ -608,7 +625,8 @@ object Reader
         var mpos = 0
         _nested = true
         printExpr(tree.mods)
-        printTypeParameters(tree.typarams)
+        // type parameters are now extracted into separate defs
+        // printTypeParameters(tree.typarams)
         if (tree.name == tree.name.table.init) {
           mpos = out.getBuffer.length
           mname = enclClassName.toString
@@ -622,16 +640,30 @@ object Reader
         print("(")
         printExprs(tree.params)
         print(")")
-        if (tree.thrown.nonEmpty()) {
-          print("\n  throws ")
-          printExprs(tree.thrown)
-        }
+        // omit throws from signatures
+        // if (tree.thrown.nonEmpty()) {
+        //   print("\n  throws ")
+        //   printExprs(tree.thrown)
+        // }
         if (tree.defaultValue != null) {
           print(" default ")
           printExpr(tree.defaultValue)
         }
         _nested = false
         elems += <sigdef id={id} name={mname} kind="func" start={mpos.toString}/>
+      }
+    }
+
+    override def visitTypeParameter (tree :JCTypeParameter) {
+      super.visitTypeParameter(tree);
+
+      // if we're generating the signature for a class, go ahead and emit sigdefs for our type
+      // parameters, but if we're generating the signature for a type parameter def, we don't want
+      // to repeat the type parameter itself as a sigdef
+      if (enclClassName != null) {
+        val tid = joinDefIds(id, tree.name.toString)
+        val tpos = out.getBuffer.length-tree.name.toString.length
+        elems += <sigdef id={tid} name={tree.name.toString} kind="term" start={tpos.toString}/>
       }
     }
 
@@ -665,7 +697,8 @@ object Reader
       if (tree.sym != null) {
         val target = tree.sym match {
           case cs :ClassSymbol => targetForTypeSym(cs)
-          case _ => Console.println("TODO? " + tree + " " + tree.sym); tree.sym.toString
+          case ts :TypeSymbol => targetForTypeSym(ts)
+          case _ => Console.println("TODO? " + tree + " " + tree.sym.getClass); tree.sym.toString
         }
         elems += <use name={tree.name.toString} target={target} kind={kindForSym(tree.sym)}
                      start={out.getBuffer.length.toString}/>
