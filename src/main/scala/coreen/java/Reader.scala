@@ -347,10 +347,13 @@ object Reader
     private def targetForSym (name :Name, sym :Symbol) :String = targetForSym(name.toString, sym)
     private def targetForSym (name :String, sym :Symbol) :String = sym match {
       case vs :VarSymbol => vs.getKind match {
-        case ElementKind.FIELD => joinDefIds(targetForSym("<error>", vs.owner), name)
-        // ENUM_CONSTANT: TODO
+        case ElementKind.FIELD | ElementKind.ENUM_CONSTANT =>
+          joinDefIds(targetForSym("<error>", vs.owner), name)
         // EXCEPTION_PARAMETER, PARAMETER, LOCAL_VARIABLE (all in symtab)
-        case _ => _symtab.map(_.get(vs)).flatten.headOption.getOrElse("unknown")
+        case _ => _symtab.map(_.get(vs)).flatten.headOption.getOrElse({
+          println("targetForSym: unhandled varsym kind: " + vs.getKind)
+          "unknown"
+        })
       }
       case _ => targetForTypeSym(sym)
     }

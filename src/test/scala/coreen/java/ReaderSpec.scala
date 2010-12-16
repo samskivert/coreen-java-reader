@@ -249,7 +249,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
   }
   """
 
-  "Reader" should "correctly handle parameterized uses" taggedAs(TheOne) in {
+  "Reader" should "correctly handle parameterized uses" in {
     val cunit = Reader.process("Foo.java", paramTypeEx)
     val pkg = (cunit \ "def").head
     val uses = pkg \\ "use"
@@ -569,6 +569,48 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
                         "java.lang Object", "java.lang Object", // siguse and use
                         "java.lang Runnable", // use (new _Runnable_())
                         "java.lang Runnable") foreach { // siguse (Foo$1 implements _Runnable_)
+      case (a, b) => a should equal(b)
+    }
+  }
+
+  val enumSwitchEx = """
+  package test;
+  public class Foo {
+    public static enum Fruit { ORANGE, APPLE, BANANA };
+    public String getColor (Fruit fruit) {
+      switch (fruit) {
+        case ORANGE: return "orange";
+        case APPLE: return "red"; // usually
+        case BANANA: return "yellow";
+        default: return "white";
+      }
+    }
+  }
+  """
+
+  "Reader" should "generate defs and refs for enums" taggedAs(TheOne) in {
+    val cunit = Reader.process("Foo.java", enumSwitchEx)
+    // println(pretty(cunit))
+    val pkg = (cunit \ "def").head
+    val defs = (pkg \\ "def") map(e => (e \ "@id").text)
+    // println("Defs:\n" + defs.mkString("\n"));
+    defs zip List("test",
+                  "test Foo",
+                  "test Foo Fruit",
+                  "test Foo Fruit ORANGE",
+                  "test Foo Fruit APPLE",
+                  "test Foo Fruit BANANA",
+                  "test Foo getColor(test.Foo.Fruit)java.lang.String",
+                  "test Foo getColor(test.Foo.Fruit)java.lang.String fruit") foreach {
+      case (a, b) => a should equal(b)
+    }
+    val useTargets = (pkg \\ "use") filter(
+      e => (e \ "@kind").text == "term") map(e => (e \ "@target").text)
+    // println("Use targets:\n" + useTargets.mkString("\n"));
+    useTargets zip List("test Foo getColor(test.Foo.Fruit)java.lang.String fruit",
+                        "test Foo Fruit ORANGE",
+                        "test Foo Fruit APPLE",
+                        "test Foo Fruit BANANA") foreach {
       case (a, b) => a should equal(b)
     }
   }
