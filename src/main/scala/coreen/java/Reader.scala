@@ -217,9 +217,13 @@ object Reader
         val stype = _types.erasure(tree.`type`)
         val supers = targetForTypeSym(stype.tsym)
 
+        // see if we have "@param <T>" style documentation for this type parameter
+        val doc = if (_ctx.curmeth != null) NoDoc
+                  else _ctx.curdoc.paramDoc("&lt;" + node.getName + "&gt;")
+
         buf += <def name={node.getName.toString} id={_curid} kind="type" flavor="type_param"
                     supers={supers} access="public" start={tree.getStartPosition.toString}>
-                 <sig>{sig.toString}{sigp.elems}</sig>{
+                 <sig>{sig.toString}{sigp.elems}</sig>{doc.format}{
                    capture(super.visitTypeParameter(node, _))
                  }</def>
       }
@@ -241,7 +245,12 @@ object Reader
         case _ => "default"
       }
 
-      val doc = if (_ctx.curmeth == null) findDoc(tree.getStartPosition).format else NodeSeq.Empty
+      // if this is a field, it will have its own doc, otherwise try to extract its documentation
+      // from the method javadoc (TODO: only do that if we're looking at a formal param def,
+      // otherwise we might assign bogus docs to a local variable that shadows a formal...)
+      val doc = if (_ctx.curmeth == null) findDoc(tree.getStartPosition)
+                else _ctx.curdoc.paramDoc(tree.name.toString)
+
       withId(joinDefIds(_curid, tree.name.toString)) {
         // add a symtab mapping for this vardef
         if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
@@ -258,7 +267,7 @@ object Reader
         buf += <def name={tree.name.toString} id={_curid} kind="term" flavor={flavor}
                     access={access} start={start.toString} bodyStart={bodyStart.toString}
                     bodyEnd={tree.getEndPosition(_ctx.curunit.endPositions).toString}>
-                 <sig>{sig}{sigp.elems}</sig>{doc}{
+                 <sig>{sig}{sigp.elems}</sig>{doc.format}{
                    if (hasFlag(tree.mods, Flags.ENUM)) NodeSeq.Empty
                    else capture(super.visitVariable(node, _))
                  }</def>
@@ -365,12 +374,20 @@ object Reader
     case class DocBit (key :String, doc :String)
     case class DefDoc (text :String, params :Seq[DocBit], throws :Seq[DocBit],
                        notes :Seq[DocBit], uses :Seq[Elem]) {
+      /** Formats this documentation into a `<doc>` element. */
+      def format () :NodeSeq = if (text.length == 0 && extras.length == 0) NodeSeq.Empty else
+        <doc>{text}{extras}{uses}</doc>
+
+      /** Extracts the documentation for an individual parameter as its own DefDoc. If no
+       * documentation exists for the parameter, `NoDoc` is returned. */
+      def paramDoc (param :String) =
+        params.find(_.key == param).map(
+          b => DefDoc("<b>" + b.key + "</b> " + b.doc, Nil, Nil, Nil, Nil)).getOrElse(NoDoc)
+
       def format (bit :DocBit) :String = "<dt>" + bit.key + "</dt><dd>" + bit.doc + "</dd>\n"
       def format (bits :Seq[DocBit]) :String = bits.map(format).mkString
       val extras = if (params.isEmpty && throws.isEmpty && notes.isEmpty) "" else
         "<dl>\n" + format(params) + format(throws) + format(notes) + "</dl>"
-      def format () :NodeSeq = if (text.length == 0 && extras.length == 0) NodeSeq.Empty else
-        <doc>{text}{extras}{uses}</doc>
     }
     val NoDoc = DefDoc("", Nil, Nil, Nil, Nil)
 
@@ -468,14 +485,8 @@ object Reader
         val throws = ArrayBuffer[DocBit]()
         val notes = ArrayBuffer[DocBit]()
         def processTag (tag :String, text :String) = tag match {
-          case "@exception" | "@throws" => firstRest(text) match {
-            case (e, "") => throws += DocBit(e, "(no docs)")
-            case (e, d) =>  throws += DocBit(e, d)
-          }
-          case "@param" => firstRest(text) match {
-            case (p, "") => params += DocBit(p, "(no docs)")
-            case (p, d) => params += DocBit(p, d)
-          }
+          case "@exception" | "@throws" => throws += firstRest(text)
+          case "@param" => params += firstRest(text)
           case "@deprecated" => notes += DocBit("Deprecated", text)
           case "@return" => notes += DocBit("Returns", text)
           case "@see" => notes += DocBit("See", "<code>" + text + "</code>")
@@ -503,8 +514,13 @@ object Reader
 
     private def firstRest (text :String) = {
       val didx = text.indexOf(" ")
-      if (didx == -1) (text, "")
-      else (text.substring(0, didx), text.substring(didx+1))
+      if (didx == -1) DocBit(text, "(no docs)")
+      else {
+        val key = text.substring(0, didx)
+        // if this is type parameter documentation, it will be <A>, but we need to escape the left
+        // and right bracket to avoid HTML befoolery
+        DocBit(escapeEntities(key), text.substring(didx+1).trim)
+      }
     }
 
     private def hasFlag (mods :JCModifiers, flag :Long) :Boolean = (mods.flags & flag) != 0

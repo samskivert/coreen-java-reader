@@ -268,7 +268,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
   }
   """
 
-  "Reader" should "correctly handle method type parameters" taggedAs(TheOne) in {
+  "Reader" should "correctly handle method type parameters" in {
     val cunit = Reader.process("Foo.java", methParamTypeEx)
     // println(pretty(cunit))
     val pkg = (cunit \ "def").head
@@ -281,6 +281,30 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
                   "T value") foreach {
       case (a, b) => a should equal(b)
     }
+  }
+
+  val paramDocEx = """
+  package test;
+  /** Models a Foo.
+   * @param <A> foos can have a parameter.
+   */
+  public class Foo<A> {
+    /** Does stuff.
+     * @param count the number of times to do it.
+     */
+    public void doStuff (int count) {}
+  }
+  """
+
+  "Reader" should "extract param documentation" taggedAs(TheOne) in {
+    val cunit = Reader.process("Foo.java", paramDocEx)
+    // println(pretty(cunit))
+    val pkg = (cunit \ "def").head
+    val docs = pkg \\ "doc"
+    // println(docs.map(_.text).mkString("\n"))
+    docs.length should equal(4)
+    docs(1).text should equal("<b>&lt;A&gt;</b> foos can have a parameter.")
+    docs(3).text should equal("<b>count</b> the number of times to do it.")
   }
 
   val flavorEx = """
