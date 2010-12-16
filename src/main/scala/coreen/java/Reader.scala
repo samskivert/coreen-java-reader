@@ -98,114 +98,111 @@ object Reader
     }
 
     override def visitCompilationUnit (node :CompilationUnitTree, buf :ArrayBuffer[Elem]) {
-      val oldunit = _curunit
-      _curunit = node.asInstanceOf[JCCompilationUnit]
-      withId(_curunit.packge.toString) {
-        buf += <def name={_curunit.packge.toString} id={_curid} kind="module" flavor="none"
-                    access={"public"}
-                    start={_text.indexOf(_curunit.packge.toString, _curunit.pos).toString}>
-                 <sig>{_curunit.packge.toString}</sig>{
-                    capture(super.visitCompilationUnit(node, _))
-                 }</def>
+      withCtx(_ctx.copy(curunit = node.asInstanceOf[JCCompilationUnit])) {
+        withId(_ctx.curunit.packge.toString) {
+          buf += <def name={_ctx.curunit.packge.toString} id={_curid} kind="module" flavor="none"
+          access={"public"}
+          start={_text.indexOf(_ctx.curunit.packge.toString, _ctx.curunit.pos).toString}>
+          <sig>{_ctx.curunit.packge.toString}</sig>{
+            capture(super.visitCompilationUnit(node, _))
+          }</def>
+        }
       }
-      _curunit = oldunit
     }
 
     override def visitClass (node :ClassTree, buf :ArrayBuffer[Elem]) = withScope {
-      val oclass = _curclass
-      _curclass = node.asInstanceOf[JCClassDecl]
+      val tree = node.asInstanceOf[JCClassDecl]
+      withCtx(_ctx.copy(curclass = tree, curdoc = findDoc(tree.getStartPosition))) {
+        val isAnon = tree.name.toString == ""
+        val clid = tree.name + (if (isAnon) "$" + nextanon() else "")
 
-      val isAnon = _curclass.name.toString == ""
-      val clid = _curclass.name + (if (isAnon) "$" + nextanon() else "")
+        val cname = if (isAnon) {
+          if (tree.extending != null) tree.extending.toString
+          else tree.implementing.toString
+        } else clid
 
-      val cname = if (isAnon) {
-        if (_curclass.extending != null) _curclass.extending.toString
-        else _curclass.implementing.toString
-      } else clid
+        val flavor = if (hasFlag(tree.mods, Flags.ANNOTATION)) "annotation"
+                     else if (hasFlag(tree.mods, Flags.ENUM)) "enum"
+                     else if (hasFlag(tree.mods, Flags.INTERFACE)) "interface"
+                     else if (hasFlag(tree.mods, Flags.ABSTRACT)) "abstract_class"
+                     else "class"
 
-      val flavor = if (hasFlag(_curclass.mods, Flags.ANNOTATION)) "annotation"
-                 else if (hasFlag(_curclass.mods, Flags.ENUM)) "enum"
-                 else if (hasFlag(_curclass.mods, Flags.INTERFACE)) "interface"
-                 else if (hasFlag(_curclass.mods, Flags.ABSTRACT)) "abstract_class"
-                 else "class"
+        def getSupers (t :Type) =
+          if (t == null) Nil
+          else if (t.isInterface) _types.interfaces(t).asScala
+          else _types.interfaces(t).prepend(_types.supertype(t)).asScala
+        val supers = getSupers(tree.`type`) map(
+          t => targetForTypeSym(_types.erasure(t).tsym)) mkString(";")
 
-      def getSupers (t :Type) =
-        if (t == null) Nil
-        else if (t.isInterface) _types.interfaces(t).asScala
-        else _types.interfaces(t).prepend(_types.supertype(t)).asScala
-      val supers = getSupers(_curclass.`type`) map(
-        t => targetForTypeSym(_types.erasure(t).tsym)) mkString(";")
+        // TODO: improve approach to finding position of class name
+        val start = _text.indexOf(cname, tree.getStartPosition)
 
-      // TODO: improve approach to finding position of class name
-      val start = _text.indexOf(cname, _curclass.getStartPosition)
-
-      val ocount = _anoncount
-      _anoncount = 0
-      withId(joinDefIds(_curid, clid)) {
-        // name in anon classes is "", but for signature generation we want to replace it with the
-        // name that will be later assigned by the compiler EnclosingClass$N
-        val sigw = new StringWriter
-        val sigp = new SigPrinter(sigw, _curid, _curclass.name.table.fromString(clid)) {
-          override def printAnnotations (trees :JCList[JCAnnotation]) {
-            super.printAnnotations(trees)
-            if (!trees.isEmpty) println
+        val ocount = _anoncount
+        _anoncount = 0
+        withId(joinDefIds(_curid, clid)) {
+          // name in anon classes is "", but for signature generation we want to replace it with the
+          // name that will be later assigned by the compiler EnclosingClass$N
+          val sigw = new StringWriter
+          val sigp = new SigPrinter(sigw, _curid, tree.name.table.fromString(clid)) {
+            override def printAnnotations (trees :JCList[JCAnnotation]) {
+              super.printAnnotations(trees)
+              if (!trees.isEmpty) println
+            }
           }
-        }
-        sigp.printExpr(_curclass)
+          sigp.printExpr(tree)
 
-        // we allow the name to be "" for anonymous classes so that they can be properly filtered
-        // in the user interface; we eventually probably want to be more explicit about this
-        buf += <def name={_curclass.name.toString} id={_curid} kind="type" flavor={flavor}
-                    access={flagsToAccess(_curclass.mods.flags)} supers={supers}
-                    start={start.toString} bodyStart={_curclass.getStartPosition.toString}
-                    bodyEnd={_curclass.getEndPosition(_curunit.endPositions).toString}>
-                 <sig>{sigw.toString}{sigp.elems}</sig>{findDoc(_curclass.getStartPosition)}{
-                   capture(super.visitClass(node, _))
-                 }</def>
+          // we allow the name to be "" for anonymous classes so that they can be properly filtered
+          // in the user interface; we eventually probably want to be more explicit about this
+          buf += <def name={tree.name.toString} id={_curid} kind="type" flavor={flavor}
+          access={flagsToAccess(tree.mods.flags)} supers={supers}
+          start={start.toString} bodyStart={tree.getStartPosition.toString}
+          bodyEnd={tree.getEndPosition(_ctx.curunit.endPositions).toString}>
+          <sig>{sigw.toString}{sigp.elems}</sig>{_ctx.curdoc.format}{
+            capture(super.visitClass(node, _))
+          }</def>
+        }
+        _anoncount = ocount
       }
-      _curclass = oclass
-      _anoncount = ocount
     }
 
     override def visitMethod (node :MethodTree, buf :ArrayBuffer[Elem]) = withScope {
-      val ometh = _curmeth
-      _curmeth = node.asInstanceOf[JCMethodDecl]
+      val tree = node.asInstanceOf[JCMethodDecl]
+      withCtx(_ctx.copy(curmeth = tree, curdoc = findDoc(tree.getStartPosition))) {
+        // don't emit a def for synthesized ctors
+        if (!hasFlag(tree.mods, Flags.GENERATEDCONSTR)) {
+          val isCtor = (tree.name eq tree.name.table.init)
+            val flavor = if (isCtor) "constructor"
+                         else if (hasFlag(_ctx.curclass.mods, Flags.INTERFACE) ||
+                                  hasFlag(tree.mods, Flags.ABSTRACT)) "abstract_method"
+                         else if (hasFlag(tree.mods, Flags.STATIC)) "static_method"
+                         else "method"
 
-      // don't emit a def for synthesized ctors
-      if (!hasFlag(_curmeth.mods, Flags.GENERATEDCONSTR)) {
-        val isCtor = (_curmeth.name eq _curmeth.name.table.init)
-        val flavor = if (isCtor) "constructor"
-                   else if (hasFlag(_curclass.mods, Flags.INTERFACE) ||
-                            hasFlag(_curmeth.mods, Flags.ABSTRACT)) "abstract_method"
-                   else if (hasFlag(_curmeth.mods, Flags.STATIC)) "static_method"
-                   else "method"
+          // interface methods are specially defined to always be public
+          val access = if (hasFlag(_ctx.curclass.mods.flags, Flags.INTERFACE)) "public"
+                       else flagsToAccess(tree.mods.flags)
 
-        // interface methods are specially defined to always be public
-        val access = if (hasFlag(_curclass.mods.flags, Flags.INTERFACE)) "public"
-                     else flagsToAccess(_curmeth.mods.flags)
+          val name = if (isCtor) _ctx.curclass.name else tree.name
 
-        val name = if (isCtor) _curclass.name else _curmeth.name
+          val supers = Option(tree.sym) flatMap(findSuperMethod) map(
+            s => targetForSym(tree.name, s)) getOrElse("")
 
-        val supers = Option(_curmeth.sym) flatMap(findSuperMethod) map(
-          s => targetForSym(_curmeth.name, s)) getOrElse("")
+          val methid = if (tree.`type` == null) "" else tree.`type`.toString
+          withId(joinDefIds(_curid, name + methid)) {
+            val sig = new StringWriter
+            val sigp = new SigPrinter(sig, _curid, _ctx.curclass.name)
+            sigp.printExpr(tree)
 
-        val methid = if (_curmeth.`type` == null) "" else _curmeth.`type`.toString
-        withId(joinDefIds(_curid, name + methid)) {
-          val sig = new StringWriter
-          val sigp = new SigPrinter(sig, _curid, _curclass.name)
-          sigp.printExpr(_curmeth)
-
-          buf += <def name={name.toString} id={_curid} kind="func"
-                      flavor={flavor} access={access} supers={supers}
-                      start={_text.indexOf(name.toString, _curmeth.getStartPosition).toString}
-                      bodyStart={_curmeth.getStartPosition.toString}
-                      bodyEnd={_curmeth.getEndPosition(_curunit.endPositions).toString}>
-                   <sig>{sig.toString.trim}{sigp.elems}</sig>{findDoc(_curmeth.getStartPosition)}{
-                     capture(super.visitMethod(node, _))
-                   }</def>
+            buf += <def name={name.toString} id={_curid} kind="func"
+            flavor={flavor} access={access} supers={supers}
+            start={_text.indexOf(name.toString, tree.getStartPosition).toString}
+            bodyStart={tree.getStartPosition.toString}
+            bodyEnd={tree.getEndPosition(_ctx.curunit.endPositions).toString}>
+            <sig>{sig.toString.trim}{sigp.elems}</sig>{_ctx.curdoc.format}{
+              capture(super.visitMethod(node, _))
+            }</def>
+          }
         }
       }
-      _curmeth = ometh
     }
 
     override def visitTypeParameter (node :TypeParameterTree, buf :ArrayBuffer[Elem]) {
@@ -216,9 +213,12 @@ object Reader
         val sigp = new SigPrinter(sig, _curid, null)
         sigp.printExpr(tree)
 
-        // TODO: make super the erased type(s) of the tvar
+        // make super the erased type(s) of the tvar (TODO: handle intersection types)
+        val stype = _types.erasure(tree.`type`)
+        val supers = targetForTypeSym(stype.tsym)
+
         buf += <def name={node.getName.toString} id={_curid} kind="type" flavor="type_param"
-                    access="public" start={tree.getStartPosition.toString}>
+                    supers={supers} access="public" start={tree.getStartPosition.toString}>
                  <sig>{sig.toString}{sigp.elems}</sig>{
                    capture(super.visitTypeParameter(node, _))
                  }</def>
@@ -231,7 +231,7 @@ object Reader
 
     override def visitVariable (node :VariableTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCVariableDecl]
-      val flavor = if (_curmeth == null) {
+      val flavor = if (_ctx.curmeth == null) {
                    if (hasFlag(tree.mods, Flags.STATIC)) "static_field"
                    else "field"
                  } else if (hasFlag(tree.mods, Flags.PARAMETER)) "param"
@@ -241,23 +241,23 @@ object Reader
         case _ => "default"
       }
 
-      val doc = if (_curmeth == null) findDoc(tree.getStartPosition) else NodeSeq.Empty
+      val doc = if (_ctx.curmeth == null) findDoc(tree.getStartPosition).format else NodeSeq.Empty
       withId(joinDefIds(_curid, tree.name.toString)) {
         // add a symtab mapping for this vardef
         if (tree.sym != null) _symtab.head += (tree.sym -> _curid)
 
         val sigw = new StringWriter
-        val sigp = new SigPrinter(sigw, _curid, _curclass.name)
+        val sigp = new SigPrinter(sigw, _curid, _ctx.curclass.name)
         sigp.printExpr(tree)
         // filter out the wacky crap Pretty puts in for enums
         val sig = sigw.toString.trim.replace("/*public static final*/ ", "")
 
-        val varend = tree.vartype.getEndPosition(_curunit.endPositions)
+        val varend = tree.vartype.getEndPosition(_ctx.curunit.endPositions)
         val start = _text.indexOf(tree.name.toString, varend)
         val bodyStart = if (tree.getStartPosition == -1) start else tree.getStartPosition
         buf += <def name={tree.name.toString} id={_curid} kind="term" flavor={flavor}
                     access={access} start={start.toString} bodyStart={bodyStart.toString}
-                    bodyEnd={tree.getEndPosition(_curunit.endPositions).toString}>
+                    bodyEnd={tree.getEndPosition(_ctx.curunit.endPositions).toString}>
                  <sig>{sig}{sigp.elems}</sig>{doc}{
                    if (hasFlag(tree.mods, Flags.ENUM)) NodeSeq.Empty
                    else capture(super.visitVariable(node, _))
@@ -267,7 +267,7 @@ object Reader
 
     override def visitIdentifier (node :IdentifierTree, buf :ArrayBuffer[Elem]) {
       val tree = node.asInstanceOf[JCIdent]
-      if (_curclass != null && // make sure we're not looking at an import
+      if (_ctx.curclass != null && // make sure we're not looking at an import
           tree.sym != null && !inAnonExtendsOrImplements &&
           !hasFlag(tree.sym.flags, Flags.SYNTHETIC) && !isSynthSuper(tree))
       {
@@ -300,7 +300,7 @@ object Reader
     override def visitMemberSelect (node :MemberSelectTree, buf :ArrayBuffer[Elem]) {
       super.visitMemberSelect(node, buf)
       val tree = node.asInstanceOf[JCFieldAccess]
-      if (_curclass != null && // make sure we're not looking at an import
+      if (_ctx.curclass != null && // make sure we're not looking at an import
           tree.sym != null) {
         val target = targetForSym(tree.name, tree.sym)
         // TODO: is there a better way to get the start position of the selected name?
@@ -362,25 +362,37 @@ object Reader
       None
     }
 
-    private def findDoc (pos :Int) :NodeSeq = {
+    case class DocBit (key :String, doc :String)
+    case class DefDoc (text :String, params :Seq[DocBit], throws :Seq[DocBit],
+                       notes :Seq[DocBit], uses :Seq[Elem]) {
+      def format (bit :DocBit) :String = "<dt>" + bit.key + "</dt><dd>" + bit.doc + "</dd>\n"
+      def format (bits :Seq[DocBit]) :String = bits.map(format).mkString
+      val extras = if (params.isEmpty && throws.isEmpty && notes.isEmpty) "" else
+        "<dl>\n" + format(params) + format(throws) + format(notes) + "</dl>"
+      def format () :NodeSeq = if (text.length == 0 && extras.length == 0) NodeSeq.Empty else
+        <doc>{text}{extras}{uses}</doc>
+    }
+    val NoDoc = DefDoc("", Nil, Nil, Nil, Nil)
+
+    private def findDoc (pos :Int) :DefDoc = {
       val docEnd = _text.lastIndexOf("*/", pos)
-      if (docEnd == -1) NodeSeq.Empty
+      if (docEnd == -1) NoDoc
       else {
         val docToDef = _text.substring(docEnd+2, pos)
-        if (docToDef.trim.length != 0) NodeSeq.Empty
+        if (docToDef.trim.length != 0) NoDoc
         else {
           val commentStart = _text.lastIndexOf("/*", docEnd)
           val docStart = _text.lastIndexOf("/**", docEnd)
-          if (docStart != commentStart) NodeSeq.Empty
+          if (docStart != commentStart) NoDoc
           else {
             val doc = trimDoc(_text.substring(docStart+3, docEnd))
             try {
-              processDoc(doc)
+              parseDoc(doc)
             } catch {
               case e => {
                 e.printStackTrace(System.out)
                 println(doc)
-                <doc>doc</doc>
+                DefDoc(doc, Nil, Nil, Nil, Nil)
               }
             }
           }
@@ -400,7 +412,7 @@ object Reader
       } else {
         // TODO: we need to do a bunch of stuff for Javadoc symbol resolution
         val (tname, mname) = (text.substring(0, hidx), text.substring(hidx+1))
-        if (tname == "") (mname, Option(_curclass) flatMap(
+        if (tname == "") (mname, Option(_ctx.curclass) flatMap(
           cc => lookup(cc.sym.members, cc.name.table.fromString(mname))))
         else (mname, None)
       }
@@ -417,10 +429,10 @@ object Reader
       else Some(e.sym)
     }
 
-      /** Performs some primitive post-processing of Javadocs. Presently: handles {at code} and
+    /** Performs some primitive post-processing of Javadocs. Presently: handles {at code} and
      * strips at tags (at param etc. will be handled later, and you can look at the full source for
      * at author, etc.). */
-    private def processDoc (text :String) = {
+    private def parseDoc (text :String) :DefDoc = {
       // first expand brace tag patterns
       val btm = _braceTagPat.matcher(text)
       val uses = ArrayBuffer[Elem]()
@@ -446,39 +458,39 @@ object Reader
 
       // now look for a block tags section and process it
       val tm = _tagPat.matcher(etext)
-      if (!tm.find) <doc>{etext}{uses}</doc>
+      if (!tm.find) DefDoc(etext, Nil, Nil, Nil, uses)
       else {
         val preText = etext.substring(0, tm.start).trim
         var tstart = tm.start
         var tend = tm.end
-        var tags = new ArrayBuffer[(String,String)]()
+
+        val params = ArrayBuffer[DocBit]()
+        val throws = ArrayBuffer[DocBit]()
+        val notes = ArrayBuffer[DocBit]()
+        def processTag (tag :String, text :String) = tag match {
+          case "@exception" | "@throws" => firstRest(text) match {
+            case (e, "") => throws += DocBit(e, "(no docs)")
+            case (e, d) =>  throws += DocBit(e, d)
+          }
+          case "@param" => firstRest(text) match {
+            case (p, "") => params += DocBit(p, "(no docs)")
+            case (p, d) => params += DocBit(p, d)
+          }
+          case "@deprecated" => notes += DocBit("Deprecated", text)
+          case "@return" => notes += DocBit("Returns", text)
+          case "@see" => notes += DocBit("See", "<code>" + text + "</code>")
+          case "@author" | "@serial" | "@serialData" | "@serialField" | "@since"
+             | "@version" => // noop!
+        }
+
         while (tm.find) {
-          tags += Pair(etext.substring(tstart, tend), etext.substring(tend, tm.start).trim)
+          processTag(etext.substring(tstart, tend), etext.substring(tend, tm.start).trim)
           tstart = tm.start
           tend = tm.end
         }
-        tags += Pair(etext.substring(tstart, tend), etext.substring(tend).trim)
+        processTag(etext.substring(tstart, tend), etext.substring(tend).trim)
 
-        val ttlist = tags.map(_ match { case (tag, text) => tag match {
-          case "@exception" | "@throws" => firstRest(text) match {
-            case (e, "") => Some("<dt>throws " + e + "</dt><dd>(no docs)</dd>") // TODO: magic
-            case (e, d) =>  Some("<dt>throws " + e + "</dt><dd>" + d + "</dd>") // TODO: magic
-          }
-          case "@param" => firstRest(text) match {
-            case (p, "") => Some("<dt>" + p + "</dt><dd>(no docs)</dd>")
-            case (p, d) => Some("<dt>" + p + "</dt><dd>" + d + "</dd>") // TODO: magic
-          }
-          case "@deprecated" => Some("<dt>Deprecated</dt><dd>" + text + "</dd>")
-          case "@return" => Some("<dt>Returns</dt><dd>" + text + "</dd>")
-          case "@see" => Some("<dt>See</dt><dd><code>" + text + "</code></dd>") // TODO: magic
-          case "@author" | "@serial" | "@serialData" | "@serialField" | "@since"
-             | "@version" => None
-        }})
-
-        <doc>{preText + (ttlist.flatten.mkString("\n") match {
-          case "" => ""
-          case text => "<dl>\n" + text + "</dl>"
-        })}{uses}</doc>
+        DefDoc(preText, params, throws, notes, uses)
       }
     }
 
@@ -508,6 +520,13 @@ object Reader
       text.replaceAll("&","&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").
            replaceAll("\"", "&quot;").replaceAll("'", "&apos;")
 
+    private def withCtx (ctx :Context)(block : =>Unit) {
+      val octx = _ctx
+      _ctx = ctx
+      block
+      _ctx = octx
+    }
+
     private def withId (id :String)(block : =>Unit) {
       val oid = _curid
       _curid = id
@@ -527,12 +546,15 @@ object Reader
       sbuf
     }
 
-    private def nextanon () = { _anoncount += 1; _anoncount }
-    private var _anoncount = 0
+    def nextanon () = { _anoncount += 1; _anoncount }
+    private var _anoncount :Int = 0
 
-    private var _curunit :JCCompilationUnit = _
-    private var _curclass :JCClassDecl = _
-    private var _curmeth :JCMethodDecl = _
+    case class Context (curunit :JCCompilationUnit,
+                        curclass :JCClassDecl,
+                        curmeth :JCMethodDecl,
+                        curdoc :DefDoc)
+    private var _ctx :Context = Context(null, null, null, null)
+
     private var _symtab :List[MMap[VarSymbol,String]] = Nil
     private var _curid :String = _
     private var _text :String = _

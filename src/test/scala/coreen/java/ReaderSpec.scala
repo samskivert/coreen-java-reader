@@ -186,7 +186,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
                                       "And a &lt;literal&gt;.") // @author and @since stripped
     val ctor = (clazz \ "def").head
     (ctor \ "doc").text should equal("This makes a foo. Beware of <code>funnyBiz</code>." +
-                                     "<dl>\n<dt>monkey</dt><dd>a monkey for your foo.</dd></dl>")
+                                     "<dl>\n<dt>monkey</dt><dd>a monkey for your foo.</dd>\n</dl>")
     // println(pretty(cunit))
     // println((ctor \ "doc").text)
     // println(ctor \ "doc" \\ "use")
@@ -253,7 +253,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val cunit = Reader.process("Foo.java", paramTypeEx)
     val pkg = (cunit \ "def").head
     val uses = pkg \\ "use"
-    println(pretty(cunit))
+    // println(pretty(cunit))
     uses.length should equal(6)
     (uses(0) \ "@target").text should equal("test Foo A")
     (uses(1) \ "@target").text should equal("test Foo B")
