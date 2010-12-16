@@ -216,8 +216,9 @@ object Reader
         val sigp = new SigPrinter(sig, _curid, null)
         sigp.printExpr(tree)
 
-        buf += <def name={node.getName.toString} id={_curid} kind="term"
-                    flavor="type_param" access="public" start={tree.getStartPosition.toString}>
+        // TODO: make super the erased type(s) of the tvar
+        buf += <def name={node.getName.toString} id={_curid} kind="type" flavor="type_param"
+                    access="public" start={tree.getStartPosition.toString}>
                  <sig>{sig.toString}{sigp.elems}</sig>{
                    capture(super.visitTypeParameter(node, _))
                  }</def>
@@ -539,8 +540,8 @@ object Reader
 
   private def kindForSym (sym :Symbol) = sym match {
     case cs :ClassSymbol => "type"
+    case ts :TypeSymbol => "type"
     case ms :MethodSymbol => "func"
-    case ts :TypeSymbol => "term" // we treat type parameters as 'type-level terms'
     case vs :VarSymbol => "term"
     case _ => "unknown"
   }
@@ -663,7 +664,7 @@ object Reader
       if (enclClassName != null) {
         val tid = joinDefIds(id, tree.name.toString)
         val tpos = out.getBuffer.length-tree.name.toString.length
-        elems += <sigdef id={tid} name={tree.name.toString} kind="term" start={tpos.toString}/>
+        elems += <sigdef id={tid} name={tree.name.toString} kind="type" start={tpos.toString}/>
       }
     }
 
