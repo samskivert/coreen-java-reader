@@ -696,13 +696,14 @@ object Reader
     }
 
     override def visitTypeParameter (tree :JCTypeParameter) {
+      // note the start of the buffer as that's where the type parameter appears
+      val tpos = out.getBuffer.length
+      // now format the type parameter expression (which may be T extends Foo, etc.)
       super.visitTypeParameter(tree);
-
-      // if we're generating the signature for a class, we need to append the type param name to
-      // the class id to get our id, if we're generating the signature for a type param directly,
-      // our id is already our id
+      // if we're generating the signature for a class, we need to append the type param name to id
+      // to get our id, otherwise id is our id as is
       val tid = if (enclClassName != null) joinDefIds(id, tree.name.toString) else id
-      val tpos = out.getBuffer.length-tree.name.toString.length
+      // finally add a sigdef for the type parameter
       elems += <sigdef id={tid} name={tree.name.toString} kind="type" start={tpos.toString}/>
     }
 
