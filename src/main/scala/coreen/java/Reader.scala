@@ -650,7 +650,7 @@ object Reader
           printExpr(tree.extending)
         }
         if (tree.implementing.nonEmpty()) {
-          print("\n  implements ")
+          print(" implements ")
           printExprs(tree.implementing)
         }
       }
