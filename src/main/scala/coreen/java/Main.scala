@@ -36,6 +36,7 @@ object Main
     val pp = new PrettyPrinter(999, 2)
     val jars = locateJarsViaMaven(root).getOrElse(
       locateJarsViaDotCoreen(root).getOrElse(files.getOrElse("jar", List())))
+    out.println("Using classpath: " + jars.mkString(File.pathSeparator))
     files get("java") match {
       case Some(javas) => {
         out.println("Compiling " + javas.size + " Java source files...")
