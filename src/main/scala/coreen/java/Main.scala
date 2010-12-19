@@ -34,7 +34,8 @@ object Main
     val root = new File(args(0))
     val files = collectFiles(root, filter)
     val pp = new PrettyPrinter(999, 2)
-    val jars = locateJars(root, files.getOrElse("jar", List()))
+    val jars = locateJarsViaMaven(root).getOrElse(
+      locateJarsViaDotCoreen(root).getOrElse(files.getOrElse("jar", List())))
     files get("java") match {
       case Some(javas) => {
         out.println("Compiling " + javas.size + " Java source files...")
@@ -44,20 +45,43 @@ object Main
     }
   }
 
-  def locateJars (root :File, defJars :Seq[File]) :Seq[File] = {
-    // if this looks like a Maven project, try getting the jars from Maven
+  def locateJarsViaMaven (root :File) :Option[Seq[File]] = {
     val pom = new File(root, "pom.xml")
-    if (pom.exists) {
+    if (!pom.exists) None else {
       try {
         val p = Runtime.getRuntime.exec(Array("mvn", "dependency:build-classpath"), null, root)
-        val output = Source.fromInputStream(p.getInputStream).getLines
-        val cpath = output.find(!_.startsWith("[")).map(_.split(File.pathSeparator).toSeq)
-        cpath.map(_.map(new File(_))).getOrElse(defJars)
+        // the first line of output that does not start with '[' is the classpath
+        Source.fromInputStream(p.getInputStream).getLines.find(!_.startsWith("[")).map(toFiles)
       } catch {
-        case e => out.println("Failure resolving Maven classpath " + e); defJars
+        case e => out.println("Failure resolving Maven classpath " + e); None
       }
-    } else defJars
+    }
   }
+
+  def locateJarsViaDotCoreen (root :File) :Option[Seq[File]] = {
+    val dc = new File(root, ".coreen")
+    if (!dc.exists) None else readConfig(dc).get("cpcommand") flatMap { cpc =>
+      try {
+        val p = Runtime.getRuntime.exec(cpc, null, root)
+        // assume the first line of output is the classpath in question
+        Source.fromInputStream(p.getInputStream).getLines.toSeq.headOption.map(toFiles)
+      } catch {
+        case e => out.println("Failure resolving classpath via '" + cpc + "': " + e); None
+      }
+    }
+  }
+
+  /** Reads our .coreen configuration file into a map of key/value pairs. */
+  def readConfig (cfile :File) :Map[String,String] = {
+    def toPair (line :String) = line.indexOf("=") match {
+      case -1 => None
+      case eidx => Some(line.substring(0, eidx).trim, line.substring(eidx+1).trim)
+    }
+    Source.fromFile(cfile).getLines.toSeq.flatMap(toPair).toMap
+  }
+
+  /** Converts a classpath string (i.e. "foo/bar.jar:dist/classes") to a Seq[File]. */
+  def toFiles (path :String) :Seq[File] = path.split(File.pathSeparator).map(new File(_)).toSeq
 
   def collectFiles (file :File, filter :(String => Boolean)) :Map[String,List[File]] = {
     def suffix (name :String) = name.substring(name.lastIndexOf(".")+1)
