@@ -7,7 +7,7 @@ import java.io.File
 import java.lang.System.out
 
 import scala.io.Source
-import scala.xml.PrettyPrinter
+import scala.xml.{Node, PrettyPrinter}
 
 /**
  * Main entry point for Java Reader.
@@ -16,33 +16,48 @@ object Main
 {
   def main (args :Array[String]) {
     if (args.length < 1) {
-      die("Usage: coreen.java.Main project_root_dir [include_prefix ...]")
+      die("Usage: coreen.java.Main project_root_dir [src_dir ...] [file ...]")
     }
 
+    // partition our arguments into source directories and files
+    val root = new File(args(0))
+    val (filters, files) = args drop(1) partition(p => new File(root, p).isDirectory)
+
     // set up a filter function if any path prefixes were provided
-    val filters = args drop(1)
     val filter = if (filters.isEmpty) (path :String) => true
                  else (path :String) => path.startsWith(args(0)) && {
                    val relpath = stripFS(path.substring(args(0).length))
                    filters exists(pre => relpath.startsWith(pre) || pre.startsWith(relpath))
                  }
 
-    // for now we just process every single java file we can find and pass every single jar file
-    // we can find on the classpath to the compiler when doing so; in the future we'll be smart
-    // and try to read Eclipse and other project files, and probably support a metadata format
-    // of our own
-    val root = new File(args(0))
-    val files = collectFiles(root, filter)
-    val pp = new PrettyPrinter(999, 2)
+    // this will scan the fill project directory for source and jar files, but we want to avoid
+    // doing that unless we actually need the data, hence the laziness
+    lazy val fmap = collectFiles(root, filter)
+
+    // try to find our project dependencies via a pom.xml file or a .coreen file, and fall back to
+    // scanning the project directories for all jar files in the absence of those
     val jars = locateJarsViaMaven(root).getOrElse(
-      locateJarsViaDotCoreen(root).getOrElse(files.getOrElse("jar", List())))
+      locateJarsViaDotCoreen(root).getOrElse(fmap.getOrElse("jar", List())))
     out.println("Using classpath: " + jars.mkString(File.pathSeparator))
-    files get("java") match {
-      case Some(javas) => {
-        out.println("Compiling " + javas.size + " Java source files...")
-        Reader.process(javas, jars) foreach(e => out.println(e))
-      }
-      case None => out.println("Found no .java files in " + root)
+
+    // if we were supplied source files on the command line, use those, otherwise use the files
+    // from the project directory scan
+    val sources = if (!files.isEmpty) files.map(new File(root, _)).toList
+                  else fmap.get("java").getOrElse(Nil)
+
+    // allow pretty printed output for debugging
+    val print = if (java.lang.Boolean.getBoolean("pretty")) {
+      val pp = new PrettyPrinter(999, 2)
+      (e :Node) => out.println(pp.format(e))
+    } else {
+      (e :Node) => out.println(e)
+    }
+
+    if (sources.isEmpty) {
+      out.println("Found no .java files in " + root)
+    } else {
+      out.println("Compiling " + sources.size + " Java source files...")
+      Reader.process(sources, jars) foreach(print)
     }
   }
 
