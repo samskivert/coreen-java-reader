@@ -280,14 +280,19 @@ object Reader
           tree.sym != null && !inAnonExtendsOrImplements &&
           !hasFlag(tree.sym.flags, Flags.SYNTHETIC) && !isSynthSuper(tree))
       {
-        // if this identifier is part of a "new C" expression, we want to climb up the AST and get
-        // the constructor from our parent tree node
+        // if this identifier is the "C" part of a "new C" expression, we want to climb up the AST
+        // and get the constructor from our parent tree node
         val pnode = getCurrentPath.getParentPath.getLeaf
         val tsym = pnode.getKind match {
           case Tree.Kind.NEW_CLASS => {
-            val csym = pnode.asInstanceOf[JCNewClass].constructor
-            // if the ctor type could not be resolved, bail early
-            if (csym == null) tree.sym
+            val ptree = pnode.asInstanceOf[JCNewClass]
+            val csym = ptree.constructor
+            // a JCNewClass has a number of JCIdent direct descendents, including the constructor
+            // arguments; we want to be sure that we're looking at the 'clazz' descendent
+            if (tree != ptree.clazz) tree.sym
+            // if the ctor type could not be resolved, just use the type itself (it probably won't
+            // have been resolved either, but we'll cope with that later)
+            else if (csym == null) tree.sym
             // if this is an anonymous class constructor...
             else if (csym.owner.name == csym.owner.name.table.empty) {
               // TODO: if the parent type is an interface, there will be no constructor (and it
@@ -296,7 +301,9 @@ object Reader
               // val ptype = _types.supertype(csym.owner.`type`)
               // TODO: if supertype is not Object, find and use super ctor
               tree.sym // for now, target the type itself
-            } else csym
+            }
+            // otherwise all is well, so use the constructor symbol as our target
+            else csym
           }
           case _ => tree.sym
         }
