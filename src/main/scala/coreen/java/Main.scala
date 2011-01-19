@@ -37,7 +37,8 @@ object Main
     // scanning the project directories for all jar files in the absence of those
     val jars = locateJarsViaMaven(root).getOrElse(
       locateJarsViaDotCoreen(root).getOrElse(files.getOrElse("jar", List())))
-    out.println("Using classpath: " + jars.mkString(File.pathSeparator))
+    out.println("Using classpath:")
+    jars.map("  " + _).foreach(out.println)
 
     // allow pretty printed output for debugging
     val print = if (java.lang.Boolean.getBoolean("pretty")) {
@@ -62,8 +63,9 @@ object Main
     if (!pom.exists) None else {
       try {
         val p = Runtime.getRuntime.exec(Array("mvn", "dependency:build-classpath"), null, root)
-        // the first line of output that does not start with '[' is the classpath
-        Source.fromInputStream(p.getInputStream).getLines.find(!_.startsWith("[")).map(toFiles)
+        // the last line of output that does not start with '[' should be the classpath
+        Source.fromInputStream(p.getInputStream).getLines.filterNot(
+          _.startsWith("[")).toList.lastOption.map(toFiles)
       } catch {
         case e => out.println("Failure resolving Maven classpath " + e); None
       }
