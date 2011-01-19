@@ -401,7 +401,7 @@ object Reader
     }
     val NoDoc = DefDoc("", Nil, Nil, Nil, Nil)
 
-    private def findDoc (pos :Int) :DefDoc = {
+    private def findDoc (pos :Int) :DefDoc = try {
       val docEnd = _text.lastIndexOf("*/", pos)
       if (docEnd == -1) NoDoc
       else {
@@ -425,7 +425,14 @@ object Reader
           }
         }
       }
+    } catch {
+      case e => {
+        println("Error finding Javadoc at " + pos + " in " + _ctx.curunit.sourcefile + ":")
+        e.printStackTrace(System.out)
+        NoDoc
+      }
     }
+
     private val _starPref = Pattern.compile("""^\* ?""")
     private def snipStar (l :String) = _starPref.matcher(l).replaceFirst("")
     private def trimDoc (text :String) =
