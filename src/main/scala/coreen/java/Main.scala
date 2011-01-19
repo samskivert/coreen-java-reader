@@ -38,7 +38,7 @@ object Main
     val jars = locateJarsViaMaven(root).getOrElse(
       locateJarsViaDotCoreen(root).getOrElse(files.getOrElse("jar", List())))
     out.println("Using classpath:")
-    jars.map("  " + _).foreach(out.println)
+    for (j <- jars) out.println("  " + j)
 
     // allow pretty printed output for debugging
     val print = if (java.lang.Boolean.getBoolean("pretty")) {
