@@ -100,12 +100,12 @@ object Reader
     override def visitCompilationUnit (node :CompilationUnitTree, buf :ArrayBuffer[Elem]) {
       withCtx(_ctx.copy(curunit = node.asInstanceOf[JCCompilationUnit])) {
         withId(_ctx.curunit.packge.toString) {
-          buf += <def name={_ctx.curunit.packge.toString} id={_curid} kind="module" flavor="none"
-          access={"public"}
-          start={_text.indexOf(_ctx.curunit.packge.toString, _ctx.curunit.pos).toString}>
-          <sig>{_ctx.curunit.packge.toString}</sig>{
-            capture(super.visitCompilationUnit(node, _))
-          }</def>
+          val pname = _ctx.curunit.packge.toString
+          buf += <def name={pname} id={_curid} kind="module" flavor="none" access={"public"}
+                      start={_text.indexOf(pname, _ctx.curunit.pos).toString}>
+                   <sig>{_ctx.curunit.packge.toString}</sig>{
+                     capture(super.visitCompilationUnit(node, _))
+                   }</def>
         }
       }
     }
@@ -154,12 +154,12 @@ object Reader
           // we allow the name to be "" for anonymous classes so that they can be properly filtered
           // in the user interface; we eventually probably want to be more explicit about this
           buf += <def name={tree.name.toString} id={_curid} kind="type" flavor={flavor}
-          access={flagsToAccess(tree.mods.flags)} supers={supers}
-          start={start.toString} bodyStart={tree.getStartPosition.toString}
-          bodyEnd={tree.getEndPosition(_ctx.curunit.endPositions).toString}>
-          <sig>{sigw.toString}{sigp.elems}</sig>{_ctx.curdoc.format}{
-            capture(super.visitClass(node, _))
-          }</def>
+                      access={flagsToAccess(tree.mods.flags)} supers={supers}
+                      start={start.toString} bodyStart={tree.getStartPosition.toString}
+                      bodyEnd={tree.getEndPosition(_ctx.curunit.endPositions).toString}>
+                   <sig>{sigw.toString}{sigp.elems}</sig>{_ctx.curdoc.format}{
+                     capture(super.visitClass(node, _))
+                   }</def>
         }
         _anoncount = ocount
       }
@@ -193,13 +193,13 @@ object Reader
             sigp.printExpr(tree)
 
             buf += <def name={name.toString} id={_curid} kind="func"
-            flavor={flavor} access={access} supers={supers}
-            start={_text.indexOf(name.toString, tree.getStartPosition).toString}
-            bodyStart={tree.getStartPosition.toString}
-            bodyEnd={tree.getEndPosition(_ctx.curunit.endPositions).toString}>
-            <sig>{sig.toString.trim}{sigp.elems}</sig>{_ctx.curdoc.format}{
-              capture(super.visitMethod(node, _))
-            }</def>
+                        flavor={flavor} access={access} supers={supers}
+                        start={_text.indexOf(name.toString, tree.getStartPosition).toString}
+                        bodyStart={tree.getStartPosition.toString}
+                        bodyEnd={tree.getEndPosition(_ctx.curunit.endPositions).toString}>
+                     <sig>{sig.toString.trim}{sigp.elems}</sig>{_ctx.curdoc.format}{
+                       capture(super.visitMethod(node, _))
+                     }</def>
           }
         }
       }
