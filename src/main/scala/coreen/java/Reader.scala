@@ -26,7 +26,7 @@ import scala.xml.{Elem, NodeSeq}
 import scalaj.collection.Imports._
 
 /**
- * Provides an API for convering Java source to name-resolved source.
+ * Provides an API for converting Java source to name-resolved source.
  */
 object Reader
 {
