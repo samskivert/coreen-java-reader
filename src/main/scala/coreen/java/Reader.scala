@@ -171,11 +171,11 @@ object Reader
         // don't emit a def for synthesized ctors
         if (!hasFlag(tree.mods, Flags.GENERATEDCONSTR)) {
           val isCtor = (tree.name eq tree.name.table.init)
-            val flavor = if (isCtor) "constructor"
-                         else if (hasFlag(_ctx.curclass.mods, Flags.INTERFACE) ||
-                                  hasFlag(tree.mods, Flags.ABSTRACT)) "abstract_method"
-                         else if (hasFlag(tree.mods, Flags.STATIC)) "static_method"
-                         else "method"
+          val flavor = if (isCtor) "constructor"
+                       else if (hasFlag(_ctx.curclass.mods, Flags.INTERFACE) ||
+                                hasFlag(tree.mods, Flags.ABSTRACT)) "abstract_method"
+                       else if (hasFlag(tree.mods, Flags.STATIC)) "static_method"
+                       else "method"
 
           // interface methods are specially defined to always be public
           val access = if (hasFlag(_ctx.curclass.mods.flags, Flags.INTERFACE)) "public"
