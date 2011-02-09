@@ -23,25 +23,22 @@ import scala.xml.{Elem, NodeSeq}
 import scalaj.collection.Imports._
 
 /**
- * Does something extraordinary.
+ * Translates a Java AST into Coreen's XML intermediate format.
  */
 class Translator (_types :Types) extends TreePathScanner[Unit,ArrayBuffer[Elem]] {
   import Translator._
 
+  /** Translate the supplied AST into Coreen's XML intermediate format. */
   def translate (ast :Tree) = {
-    val text = ast.asInstanceOf[JCCompilationUnit].sourcefile.getCharContent(true).toString
+    _text = ast.asInstanceOf[JCCompilationUnit].sourcefile.getCharContent(true).toString
+    val buf = ArrayBuffer[Elem]()
+    scan(ast, buf)
+
     // TODO: someday we should be able to remove .getPath (or maybe even use toUri.toString)
     val file = new File(ast.asInstanceOf[JCCompilationUnit].sourcefile.toUri.getPath)
     <compunit src={file.toURI.toString}>
-    {process(text, ast)}
+    {buf toList}
     </compunit>
-  }
-
-  def process (text :String, path :Tree) :List[Elem] = {
-    val buf = ArrayBuffer[Elem]()
-    _text = text
-    scan(path, buf)
-    buf toList
   }
 
   override def visitCompilationUnit (node :CompilationUnitTree, buf :ArrayBuffer[Elem]) {
@@ -569,12 +566,12 @@ object Translator {
     }
   }
 
-  private def joinDefIds (first :String, second :String) = {
+  def joinDefIds (first :String, second :String) = {
     val sep = if (!first.isEmpty) " " else ""
     first + sep + second
   }
 
-  private class SigPrinter (
+  class SigPrinter (
     out :StringWriter, id :String, enclClassName :Name
   ) extends Pretty(out, false) {
     // use nodes accumulated while printing a signature
