@@ -91,7 +91,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     (outer \ "@name").text should equal("Foo");
     val main = (outer \ "def").head
     val bar = (main \ "def").tail.head
-    (bar \ "sig").text should equal("Bar bar") // no type info for 'Bar'
+    (bar \ "sig").text should equal("bar :Bar") // no type info for 'Bar'
   }
 
   val extendsEx = """
@@ -211,7 +211,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val clazz = (pkg \ "def").head
     val sig = (clazz \ "sig").text
     sig should equal("@Deprecated \n" +
-                     "public class Foo extends Object\n  implements Runnable")
+                     "public class Foo extends Object implements Runnable")
     // println(pretty(cunit))
   }
 
@@ -276,9 +276,9 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     // println(sigs)
     sigs zip List("test",
                   "public class Foo",
-                  "public int toInt(T value)",
+                  "toInt(T value) :int",
                   "T extends Number",
-                  "T value") foreach {
+                  "value :T") foreach {
       case (a, b) => a should equal(b)
     }
   }
@@ -453,7 +453,7 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val clazz = (pkg \ "def").head
     val ctor = (clazz \ "def").head
     val sig = (ctor \ "sig").text
-    sig should equal("public Foo(@Test String test)")
+    sig should equal("Foo(@Test String test)")
     // println(pretty(cunit))
   }
 
@@ -471,9 +471,9 @@ class ReaderSpec extends FlatSpec with ShouldMatchers
     val bar = (clazz \ "def")(0)
     val baz = (clazz \ "def")(1)
     val bif = (clazz \ "def")(2)
-    (bar \ "sig").text should equal ("BAR")
-    (baz \ "sig").text should equal ("BAZ")
-    (bif \ "sig").text should equal ("BIF")
+    (bar \ "sig").text should equal ("BAR :Foo")
+    (baz \ "sig").text should equal ("BAZ :Foo")
+    (bif \ "sig").text should equal ("BIF :Foo")
   }
 
   val selectUseEx = """
