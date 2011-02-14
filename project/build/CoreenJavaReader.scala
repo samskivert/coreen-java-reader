@@ -10,10 +10,11 @@ class CoreenJavaReader (info :ProjectInfo) extends DefaultProject(info) with Pro
   override def unmanagedClasspath = super.unmanagedClasspath +++ toolsJarPath
 
   // proguard plugin configurations
-  override def proguardInJars = super.proguardInJars +++ scalaLibraryPath
-  override def proguardLibraryJars = super.proguardLibraryJars +++ toolsJarPath
+  override def proguardInJars = super.proguardInJars +++ toolsJarPath
+  override def proguardLibraryJars = super.proguardLibraryJars +++ scalaLibraryPath
   override def proguardOptions = List(
     "-dontnote scala.**,sun.tools.**,sun.applet.**",
+    "-keep class com.sun.tools.javac.** { *; }",
     proguardKeepMain("coreen.java.Main")
   )
 }
