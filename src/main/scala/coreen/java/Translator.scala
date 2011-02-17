@@ -713,7 +713,7 @@ object Translator {
           case _ => Console.println("TODO? " + tree + " " + tree.sym.getClass); tree.sym.toString
         }
         elems += <use name={tree.name.toString} target={target} kind={kindForSym(tree.sym)}
-        start={out.getBuffer.length.toString}/>
+                      start={out.getBuffer.length.toString}/>
       }
       super.visitIdent(tree)
     }
