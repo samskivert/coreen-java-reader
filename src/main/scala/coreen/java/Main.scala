@@ -101,7 +101,7 @@ object Main
     def suffix (name :String) = name.substring(name.lastIndexOf(".")+1)
     def collect (file :File) :List[(String,File)] = {
       if (file.isDirectory) {
-        if (filter(file.getPath)) file.listFiles.toList flatMap(collect)
+        if (!isSymlink(file) && filter(file.getPath)) file.listFiles.toList flatMap(collect)
         else List()
       } else suffix(file.getName) match {
         case "java" => List(("java", file.getCanonicalFile))
@@ -113,6 +113,9 @@ object Main
   }
 
   def stripFS (path :String) = if (path.startsWith(File.separator)) path.substring(1) else path
+
+  // a flaky and expensive means for detecting if a file is a symlink that works for our uses
+  private def isSymlink (file :File) = file.getCanonicalPath != file.getAbsolutePath
 
   private def die (msg :String) = {
     System.err.println(msg)
