@@ -21,22 +21,17 @@ object Main
     }
 
     // extract and parse our arguments
-    val (root, lastMod, filters) = (new File(args(0)), args(1).toLong, args drop(2))
-
-    // set up a filter function if any path prefixes were provided
-    val filter = if (filters.isEmpty) (path :String) => true
-                 else (path :String) => path.startsWith(args(0)) && {
-                   val relpath = stripFS(path.substring(args(0).length))
-                   filters exists(pre => relpath.startsWith(pre) || pre.startsWith(relpath))
-                 }
+    val (root, lastMod, srcPrefixes) = (new File(args(0)), args(1).toLong, args drop(2))
 
     // scan the project directory for source and jar files
-    val files = collectFiles(root, filter)
+    val files = Collector.collect(root, srcPrefixes, Set("jar"))
 
-    // try to find our project dependencies via a pom.xml file or a .coreen file, and fall back to
-    // scanning the project directories for all jar files in the absence of those
-    val jars = locateJarsViaMaven(root).getOrElse(
-      locateJarsViaDotCoreen(root).getOrElse(files.getOrElse("jar", List())))
+    // try to find our project dependencies via one of...
+    val finders = List(locateJarsViaMaven _,       // a Maven pom.xml file
+                       locateJarsViaDotCoreen _,   // a .coreen file
+                       locateJarsViaScan(files) _) // all jar files found in our scan
+    // ewww, there must be a better way
+    val jars = finders.view.map(_(root)).find(_.isDefined).getOrElse(Some(List())).get
     out.println("Using classpath:")
     for (j <- jars) out.println("  " + j)
 
@@ -85,6 +80,8 @@ object Main
     }
   }
 
+  def locateJarsViaScan (files :Map[String,Seq[File]])(root :File) = files.get("jar")
+
   /** Reads our .coreen configuration file into a map of key/value pairs. */
   def readConfig (cfile :File) :Map[String,String] = {
     def toPair (line :String) = line.indexOf("=") match {
@@ -97,27 +94,7 @@ object Main
   /** Converts a classpath string (i.e. "foo/bar.jar:dist/classes") to a Seq[File]. */
   def toFiles (path :String) :Seq[File] = path.split(File.pathSeparator).map(new File(_)).toSeq
 
-  def collectFiles (file :File, filter :(String => Boolean)) :Map[String,List[File]] = {
-    def suffix (name :String) = name.substring(name.lastIndexOf(".")+1)
-    def collect (file :File) :List[(String,File)] = {
-      if (file.isDirectory) {
-        if (!isSymlink(file) && filter(file.getPath)) file.listFiles.toList flatMap(collect)
-        else List()
-      } else suffix(file.getName) match {
-        case "java" => List(("java", file.getCanonicalFile))
-        case "jar" => List(("jar", file.getCanonicalFile))
-        case _ => List()
-      }
-    }
-    collect(file) groupBy(_._1) mapValues(_.map(_._2) distinct)
-  }
-
-  def stripFS (path :String) = if (path.startsWith(File.separator)) path.substring(1) else path
-
-  // a flaky and expensive means for detecting if a file is a symlink that works for our uses
-  private def isSymlink (file :File) = file.getCanonicalPath != file.getAbsolutePath
-
-  private def die (msg :String) = {
+  def die (msg :String) = {
     System.err.println(msg)
     System.exit(255)
     error("Not reached")
