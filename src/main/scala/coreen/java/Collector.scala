@@ -29,14 +29,9 @@ private class Collector (relRoot :File, srcPrefixes :Seq[String], libSuffixes :S
   val root = relRoot.getCanonicalFile
   val rootPath = root.getPath
 
-  val ignores = List(".git", ".svn", ".hg")
+  val ignoreDirs = Set(".git", ".svn", ".hg")
 
   def suffix (name :String) = name.substring(name.lastIndexOf(".")+1)
-
-  def shouldTraverse (dir :File) = {
-    val path = dir.getPath
-    path.startsWith(rootPath) && !ignores.contains(dir.getName)
-  }
 
   def shouldAdd (file :File) = srcPrefixes.isEmpty || libSuffixes(suffix(file.getPath)) || {
     def stripFS (path :String) = if (path.startsWith(File.separator)) path.substring(1) else path
@@ -49,12 +44,17 @@ private class Collector (relRoot :File, srcPrefixes :Seq[String], libSuffixes :S
     val files = MSet[File]()
     def collect (file :File) {
       val canon = file.getCanonicalFile
-      if (canon.isDirectory) {
-        if (!seenDirs(canon) && shouldTraverse(canon)) {
-          seenDirs += canon
-          canon.listFiles foreach(collect)
+      // ignore files/dirs that are symlinks outside the project root
+      if (canon.getPath.startsWith(rootPath)) {
+        if (canon.isDirectory) {
+          if (!seenDirs(canon) && !ignoreDirs(canon.getName)) {
+            seenDirs += canon
+            canon.listFiles foreach(collect)
+          }
+        } else {
+          if (shouldAdd(canon)) files += canon
         }
-      } else if (shouldAdd(canon)) files += canon
+      }
     }
     collect(root)
 
